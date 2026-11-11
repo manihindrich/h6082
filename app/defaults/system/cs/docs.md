@@ -52,6 +52,7 @@ H6082_PORT=8088
 H6082_EDITOR_USER=h6082
 H6082_EDITOR_PASSWORD=… # openssl rand -base64 24
 H6082_ALLOWED_HOSTS=    # další hostnames, např. doména za reverzní proxy
+H6082_READONLY=         # 1 = veřejná stránka jen pro čtení (viz Režim jen pro čtení)
 H6082_DISK_ROOT=/var/empty
 ```
 Po změně `.env` spusť `docker compose up -d`. Zpřístupnění do sítě popisuje blok Bezpečnost na stránce [h6082](/h6082).
@@ -312,6 +313,17 @@ ICMP ping v kontejneru nejde, protože kontejner běží bez root práv. Místo 
 : starší verze se mažou. 3 nejnovější zůstávají vždy.
 
 Verze je **stav souboru před změnou**. Zachytí se úpravy z editoru i odjinud (vim, git): server kontroluje soubory každé 2 s. Před obnovením se současný stav uloží jako nová verze, takže i obnovení jde vrátit. Obsah verzí, diff a obnovení jsou za heslem editoru. Blok `{{history}}` ukazuje jen časy, názvy a počty řádků.
+
+## Režim jen pro čtení
+`H6082_READONLY=1` udělá z aplikace veřejnou stránku jen pro čtení, např. demo na internetu:
+
+- nic nejde uložit: editor, nové soubory, mazání, poznámky, úkoly, motiv, jazyk i historie vrací `403` a jejich ovládání je skryté
+- obsah je jen z image (`app/defaults/`): žádný volume, nic se nenaplňuje ani nepřepisuje
+- živé obnovení (`/events`), stav serveru (`/api/sys`) a historie změn jsou vypnuté
+- motiv a jazyk si návštěvník volí jen ve svém prohlížeči (cookie), server nic neukládá
+- stav služeb a RSS fungují dál, jen pro cíle napsané v md souborech v image
+
+Spouštěj ho se systémem souborů jen pro čtení a bez volume (viz `h6082-deploy-demo`). I chyba v aplikaci pak nemá kam zapsat a restart je vždy čistý.
 
 ## Demo režim
 Bloky `{{sys}}` a `{{history}}` mají přepínač `demo`. S ním ukážou **vymyšlená data**, která vzniknou přímo v prohlížeči bez dotazu na server. Hodí se do ukázek, dokumentace a na veřejné stránky.

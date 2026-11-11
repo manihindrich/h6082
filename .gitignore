@@ -5,6 +5,7 @@
 /content/
 # local checkouts of the deploy repositories
 /h6082-deploy/
+/h6082-deploy-demo/
 /timeful-deploy/
 # Claude Code session files
 .claude/

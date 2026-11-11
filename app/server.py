@@ -39,7 +39,10 @@ from pygments.formatters import HtmlFormatter
 from pygments.styles import get_all_styles
 
 APP = Path(__file__).resolve().parent
-CONTENT = Path(os.environ.get("CONTENT_DIR", APP / "content"))
+# Read-only mode for a public demo: no writes at all (editor, notes, tasks, theme, language,
+# history), no live reload; content comes only from the image (app/defaults/), no volume needed.
+READONLY = os.environ.get("H6082_READONLY", "").lower() in ("1", "true", "yes")
+CONTENT = APP / "defaults" if READONLY else Path(os.environ.get("CONTENT_DIR", APP / "content"))
 CFG_FILE = CONTENT / "config.toml"
 PAGES = Path(os.environ.get("PAGES_DIR", CONTENT / "pages"))
 STATIC = APP / "static"
@@ -506,6 +509,7 @@ def t(cfg, key, **kw):
 def js_strings(cfg):
     """JS strings as a JSON object literal, safe to embed in <script>."""
     d = {k[3:]: v for k, v in STRINGS[cur_lang(cfg)].items() if k.startswith("js_")}
+    d["readonly"] = READONLY
     return json.dumps(d, ensure_ascii=False).replace("</", "<\\/")
 
 
@@ -624,17 +628,29 @@ def deep_merge(base, over, path=""):
 _cfg = {"mtime": object(), "cfg": DEFAULTS}
 
 
+def readonly_overrides(cfg):
+    """In read-only mode every feature that writes or reveals the server is switched off."""
+    if not READONLY:
+        return cfg
+    cfg = copy.deepcopy(cfg)
+    cfg["editor"]["enabled"] = False
+    cfg["history"]["enabled"] = False
+    cfg["system"]["enabled"] = False
+    cfg["page"]["live_reload"] = False
+    return cfg
+
+
 def load_config():
     m = mtime(CFG_FILE)
     if m == _cfg["mtime"]:
         return _cfg["cfg"]
     _cfg["mtime"] = m
     if m is None:
-        _cfg["cfg"] = DEFAULTS
-        return DEFAULTS
+        _cfg["cfg"] = readonly_overrides(DEFAULTS)
+        return _cfg["cfg"]
     try:
         with CFG_FILE.open("rb") as f:
-            _cfg["cfg"] = deep_merge(DEFAULTS, tomllib.load(f))
+            _cfg["cfg"] = readonly_overrides(deep_merge(DEFAULTS, tomllib.load(f)))
         log.info("config loaded")
     except (tomllib.TOMLDecodeError, OSError) as e:
         log.warning("config.toml cannot be read (%s) — keeping the last valid one", e)
@@ -754,6 +770,10 @@ THEME_JS = """<script nonce="__NONCE__">
     const t = b.dataset.themeSet, prev = root.dataset.theme;
     root.dataset.theme = t;
     sync();
+    if (T.readonly) {  // read-only: the choice lives only in this browser (cookie read by the server)
+      document.cookie = 'h6082_theme=' + encodeURIComponent(t) + '; path=/; max-age=31536000; SameSite=Lax';
+      return;
+    }
     // save to config.toml ([theme] default) — applies to every browser
     fetch('/api/theme', {method: 'POST', headers: {'X-H6082': '1', 'Content-Type': 'application/json'},
       body: JSON.stringify({theme: t})}).then(async (r) => {
@@ -767,6 +787,11 @@ THEME_JS = """<script nonce="__NONCE__">
   document.addEventListener('click', async (e) => {
     const b = e.target.closest('.lang-btn[data-lang-set]');
     if (!b) return;
+    if (T.readonly) {  // read-only: the choice lives only in this browser
+      document.cookie = 'h6082_lang=' + encodeURIComponent(b.dataset.langSet) + '; path=/; max-age=31536000; SameSite=Lax';
+      location.reload();
+      return;
+    }
     const r = await fetch('/api/lang', {method: 'POST', headers: {'X-H6082': '1', 'Content-Type': 'application/json'},
       body: JSON.stringify({lang: b.dataset.langSet})});
     if (r.ok) { location.reload(); return; }
@@ -2325,10 +2350,17 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(body)
         return False
 
+    def _cookie(self, name):
+        """A visitor preference cookie — used only in read-only mode (nothing is stored server-side)."""
+        if not READONLY:
+            return ""
+        m = re.search(rf"(?:^|;\s*){name}=([^;]*)", self.headers.get("Cookie") or "")
+        return unquote(m.group(1)) if m else ""
+
     def _theme(self):
         """Theme = [theme] default from the config; ?theme=… is a preview for one request only."""
         cfg = load_config()
-        q = parse_qs(urlsplit(self.path).query).get("theme", [""])[0]
+        q = parse_qs(urlsplit(self.path).query).get("theme", [""])[0] or self._cookie("h6082_theme")
         names = theme_names(cfg)
         if q in names:
             return q
@@ -2405,6 +2437,8 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/healthz":
             return self._send(200, b"ok\n", "text/plain")
         if path == "/events":
+            if READONLY:  # nothing ever changes, no long-lived connections for the public
+                return self._send(404, b"404\n", "text/plain")
             return self._events()
         if path == "/themes.css":
             return self._themes_css()
@@ -2442,7 +2476,8 @@ class Handler(BaseHTTPRequestHandler):
         name = path.strip("/") or None
         if name and name.endswith(".md"):
             name = name[:-3]
-        code, body = render_tab(name, embed=qs.get("embed") == ["1"], lang=qs.get("lang", [None])[0])
+        lang = qs.get("lang", [None])[0] or self._cookie("h6082_lang") or None
+        code, body = render_tab(name, embed=qs.get("embed") == ["1"], lang=lang)
         self._send(code, body, "text/html; charset=utf-8")
 
     def _themes_css(self):
@@ -2894,8 +2929,12 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    seed_content()
-    threading.Thread(target=history_watcher, name="history", daemon=True).start()
+    if READONLY:
+        log.info("READ-ONLY mode: content from %s, all writes disabled", CONTENT)
+    else:
+        seed_content()
+        threading.Thread(target=history_watcher, name="history", daemon=True).start()
     log.info("content: %s, pages: %s, port %d, editor password: %s",
-             CONTENT, PAGES, PORT, "yes" if EDITOR_PASSWORD else "NO (H6082_EDITOR_PASSWORD is not set)")
+             CONTENT, PAGES, PORT, "n/a (read-only)" if READONLY
+             else "yes" if EDITOR_PASSWORD else "NO (H6082_EDITOR_PASSWORD is not set)")
     ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()

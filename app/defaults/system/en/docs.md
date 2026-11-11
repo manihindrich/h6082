@@ -52,6 +52,7 @@ H6082_PORT=8088
 H6082_EDITOR_USER=h6082
 H6082_EDITOR_PASSWORD=… # openssl rand -base64 24
 H6082_ALLOWED_HOSTS=    # extra hostnames, e.g. a domain behind a reverse proxy
+H6082_READONLY=         # 1 = public read-only page (see Read-only mode)
 H6082_DISK_ROOT=/var/empty
 ```
 After changing `.env` run `docker compose up -d`. Exposing the page to a network is covered by the Security block on the [h6082](/h6082) page.
@@ -312,6 +313,17 @@ ICMP ping is not possible in the container, as it runs without root privileges. 
 : older versions are deleted. The 3 newest always stay.
 
 A version is **the state of the file before a change**. Edits from the editor and from elsewhere (vim, git) are caught: the server checks the files every 2 s. Before a restore, the current state is saved as a new version, so a restore can be undone too. Version contents, diff and restore are behind the editor password. The `{{history}}` block shows only times, names and line counts.
+
+## Read-only mode
+`H6082_READONLY=1` turns the application into a public, read-only page — e.g. a demo on the internet:
+
+- nothing can be saved: the editor, new files, deleting, notes, tasks, theme, language and history return `403`, and their controls are hidden
+- content comes only from the image (`app/defaults/`): no volume, nothing to fill or overwrite
+- live reload (`/events`), server stats (`/api/sys`) and the change history are off
+- a visitor's theme and language are kept only in their own browser (cookie); the server stores nothing
+- service status and RSS keep working, only for targets written in the image's md files
+
+Run it with a read-only file system and no volume (see `h6082-deploy-demo`); even a bug in the application then has nowhere to write, and a restart is always clean.
 
 ## Demo mode
 The `{{sys}}` and `{{history}}` blocks have a `demo` switch. With it they show **made-up data**, generated in the browser without asking the server. Handy for examples, documentation and public pages.
