@@ -6,26 +6,27 @@ docker-compose.yml
 Dockerfile
 .env            (local, do not commit)
 .env.example
-content/
-  config.toml
-  pages/*.md         your tabs (+ translations *.cs.md)
-  system/en/*.md     built-in pages in English
-  system/cs/*.md     built-in pages in Czech
-  media/             images
 app/
   server.py
   static/
+  defaults/          shipped with the image: built-in pages, demo, images, default config
+content/             your data only — an update never touches it
+  config.toml        your configuration (copied from the defaults on the first start)
+  pages/*.md         your tabs (+ translations *.cs.md)
+  system/<lang>/     your customised built-in pages (optional)
+  media/             your images
 ```
 - `docker-compose.yml`: the container and its hardening
 - `.env`: local settings and the editor password, template `.env.example`. It is in `.gitignore`.
 - `config.toml`: configuration (this tab)
+- `app/defaults/`: what comes with the application — built-in pages h6082, markdown and config in each language, the demo tab, its images and the default `config.toml`
 - `pages/*.md`: your tabs, optionally with translations `name.cs.md` and `name.en.md` (see Languages)
-- `system/<lang>/`: the built-in pages h6082, markdown and config in each language
+- `system/<lang>/`: your own copies of built-in pages, created by saving them in the editor
 - `server.py`: generator, HTTP server, API (editor, checks, RSS)
 - `.trash/`: deleted files, created by the first delete
 - `.history/`: file versions, created by the first change
 - `static/`: CSS, font, application icons
-- `media/`: own images for tabs (`/media/<file>`)
+- `media/`: own images for tabs (`/media/<file>`); files of the same name in `app/defaults/media/` are used as a fallback
 
 The `content/` folder is mounted writable into the container so the web editor can save into it. The container runs as the UID:GID from `.env`, so the files stay yours. Changes in `app/` need a rebuild.
 
@@ -50,11 +51,29 @@ H6082_BIND=127.0.0.1    # this machine only
 H6082_PORT=8088
 H6082_EDITOR_USER=h6082
 H6082_EDITOR_PASSWORD=… # openssl rand -base64 24
+H6082_ALLOWED_HOSTS=    # extra hostnames, e.g. a domain behind a reverse proxy
 H6082_DISK_ROOT=/var/empty
 ```
 After changing `.env` run `docker compose up -d`. Exposing the page to a network is covered by the Security block on the [h6082](/h6082) page.
 
 `extra_hosts: host.docker.internal:host-gateway` lets you check services running directly on the host. The service must however listen on the docker bridge too, not only on `127.0.0.1`.
+
+## Updates
+An update replaces only the application (the image). **Your data in `content/` and `.env` are never touched**:
+
+| part | after an update |
+|---|---|
+| your tabs, notes, tasks | unchanged |
+| `content/config.toml` | unchanged; new options use their defaults until you set them |
+| built-in pages (h6082, markdown, config) | new version from the image |
+| your customised built-in page | yours stays; ↺ on the h6082 page returns the new default |
+| demo tab | copied only on the very first start (marker `content/.seeded`), never again |
+
+First start with an empty `content/`: the default `config.toml` and the demo tab are copied there. A deleted demo therefore never comes back.
+
+A deployment adds its domain with the `H6082_ALLOWED_HOSTS` environment variable (comma separated) instead of editing `[api] allowed_hosts` in your config.
+
+Update: `git pull && docker compose up -d --build`. On a server this is done by the deploy workflow (repository `h6082-deploy`).
 
 ## Live changes
 An open page refreshes itself after a save, typically within 0.5 s (`live_reload`). The server watches the modification time of files in `content/` and notifies the browser via SSE (`/events`). The browser swaps the content without flicker and keeps the scroll position.
@@ -62,7 +81,7 @@ An open page refreshes itself after a save, typically within 0.5 s (`live_reload
 Green dot at the top right = the connection is active. It reconnects by itself after a container restart. Behind a reverse proxy, buffering must be disabled for `/events`.
 
 Without live reload, the modification time is checked on every request:
-- `pages/*.md` and `system/*/*.md` → the tab is re-rendered
+- `pages/*.md` and `system/*/*.md` → the tab is re-rendered (a new image re-renders everything)
 - `config.toml` → all tabs are re-rendered
 - a new or deleted `.md` → the tab bar changes
 
@@ -159,7 +178,7 @@ An overview is in the Security block on the [h6082](/h6082) page. Technical deta
 - writes are atomic via a temp file and a rename, a file is never left half-written
 - concurrency check: the editor never overwrites a change made elsewhere
 - size limit `max_size_kb`
-- system files (`h6082`, `showcase`, `docs`, `config.toml`) cannot be deleted; deleting is just a move to `content/.trash/`
+- system files (`h6082`, `showcase`, `docs`, `config.toml`) cannot be deleted, only your copy of a built-in page can be reset; deleting is just a move to `content/.trash/`
 - `/api/check` and `/api/rss` work only with targets and feeds written in md files, so the server cannot be abused to scan a network
 - RSS is parsed with `defusedxml` (protection against XML bombs and external entities). Only `http(s)` links get into the page, inserted as text, not as HTML.
 - checks and RSS follow redirects only to `http(s)` and at most 3 times

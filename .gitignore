@@ -1,9 +1,11 @@
 # local settings and passwords
 .env
-# files deleted in the editor
-content/.trash/
-# file version history (may contain deleted content)
-content/.history/
+# user data (tabs, config, history, trash) — never part of the repository;
+# shipped defaults live in app/defaults/ and are copied on the first start
+/content/
+# local checkouts of the deploy repositories
+/h6082-deploy/
+/timeful-deploy/
 # Claude Code session files
 .claude/
 __pycache__/

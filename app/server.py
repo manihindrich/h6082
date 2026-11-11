@@ -47,13 +47,18 @@ PORT = int(os.environ.get("PORT", "8080"))
 # Editor password (HTTP Basic) from the environment — set it in .env, never in config or md.
 EDITOR_USER = os.environ.get("H6082_EDITOR_USER", "h6082")
 EDITOR_PASSWORD = os.environ.get("H6082_EDITOR_PASSWORD", "")
+# Extra hostnames for the deployment (comma separated), added to [api] allowed_hosts —
+# a deployment can add its domain without touching the user's config.toml.
+EXTRA_HOSTS = {h.strip().lower() for h in os.environ.get("H6082_ALLOWED_HOSTS", "").split(",") if h.strip()}
 # CSP nonce placeholder: random per start, so md content cannot know it.
 NONCE_PH = f"__nonce_{secrets.token_hex(8)}__"
 SSE_SLOTS = threading.BoundedSemaphore(32)  # max. concurrent /events connections
 RESERVED = {"static", "events", "healthz", "edit", "api", "history", "media"}
-MEDIA = CONTENT / "media"                    # own images, served at /media/<file>
+MEDIA = CONTENT / "media"                    # own images, served at /media/<file> (falls back to defaults)
 MEDIA_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*\.(svg|png|jpe?g|webp|gif|avif|ico)$", re.I)
-SYSTEM = CONTENT / "system"                  # built-in pages per language: system/<lang>/<name>.md
+SYSTEM = CONTENT / "system"                  # user overrides of built-in pages: system/<lang>/<name>.md
+DEFAULTS_DIR = APP / "defaults"              # shipped with the image: system pages, demo, media, config
+DEFAULT_SYSTEM = DEFAULTS_DIR / "system"
 SYSTEM_PAGES = {"h6082", "showcase", "docs"}  # + [page].about_tab; cannot be deleted
 TRASH = CONTENT / ".trash"                   # "deleted" files (can be restored)
 
@@ -259,6 +264,8 @@ STRINGS = {
         "st_right": "top right",
         "st_hidden": "hidden",
         "st_config": "configuration",
+        "st_custom": "customised",
+        "reset_default": "reset to the default version",
         "no_files": "no files",
         "newfile_placeholder": "name",
         "newfile_button": "create",
@@ -342,6 +349,7 @@ STRINGS = {
         "js_locale": "en-GB",
         "js_theme_not_saved": "The theme was not saved: ",
         "js_lang_not_saved": "The language was not saved: ",
+        "js_confirm_reset": "Reset {f} to the default version?\n\nYour changes are moved to content/.trash/.",
         "js_confirm_delete_file": "Delete {f}?\n\nThe file (and its translations) is moved to content/.trash/ and can be restored manually.",
         "js_server": "server: ",
         "js_unavailable": "unavailable",
@@ -372,6 +380,8 @@ STRINGS = {
         "st_right": "vpravo",
         "st_hidden": "skrytá",
         "st_config": "konfigurace",
+        "st_custom": "upraveno",
+        "reset_default": "vrátit výchozí verzi",
         "no_files": "žádné soubory",
         "newfile_placeholder": "název",
         "newfile_button": "vytvořit",
@@ -455,6 +465,7 @@ STRINGS = {
         "js_locale": "cs-CZ",
         "js_theme_not_saved": "Motiv se neuložil: ",
         "js_lang_not_saved": "Jazyk se neuložil: ",
+        "js_confirm_reset": "Vrátit {f} na výchozí verzi?\n\nTvoje úpravy se přesunou do content/.trash/.",
         "js_confirm_delete_file": "Smazat {f}?\n\nSoubor (i jeho překlady) se přesune do content/.trash/ — jde vrátit ručně.",
         "js_server": "server: ",
         "js_unavailable": "nedostupné",
@@ -538,7 +549,8 @@ def page_path(cfg, name):
     """File to render for a tab in the current language (system pages from content/system/)."""
     lang = cur_lang(cfg)
     if name in SYSTEM_PAGES:
-        cands = [SYSTEM / lang / f"{name}.md", SYSTEM / "en" / f"{name}.md"]
+        cands = [SYSTEM / lang / f"{name}.md", DEFAULT_SYSTEM / lang / f"{name}.md",
+                 SYSTEM / "en" / f"{name}.md", DEFAULT_SYSTEM / "en" / f"{name}.md"]
     else:
         cands = [PAGES / f"{name}.{lang}.md", PAGES / f"{name}.md"] + \
                 [PAGES / f"{name}.{x}.md" for x in LANGS]
@@ -547,13 +559,47 @@ def page_path(cfg, name):
 
 def file_id(p):
     """Identifier used by the editor and APIs: `name.md`, `name.cs.md` or `system/<lang>/name.md`."""
-    if p.parent.parent == SYSTEM:
+    if p.parent.parent in (SYSTEM, DEFAULT_SYSTEM):
         return f"system/{p.parent.name}/{p.name}"
     return p.name
 
 
 def system_files():
+    """User overrides of built-in pages (only these are tracked by the history)."""
     return [p for lang in LANGS for p in sorted((SYSTEM / lang).glob("*.md")) if TAB_RE.match(p.stem)]
+
+
+def default_of(p):
+    """Shipped default for an override path content/system/<lang>/<name>.md (or None)."""
+    if p.parent.parent == SYSTEM:
+        d = DEFAULT_SYSTEM / p.parent.name / p.name
+        return d if d.is_file() else None
+    return None
+
+
+def allowed_hosts(cfg):
+    return {str(h).lower() for h in cfg["api"]["allowed_hosts"]} | EXTRA_HOSTS
+
+
+def seed_content():
+    """First start: create content/ folders, copy the default config and the demo tab.
+    The demo is copied only once (marker content/.seeded), so a deleted demo never comes back
+    and an update never overwrites anything in content/."""
+    try:
+        for d in (PAGES, MEDIA):
+            d.mkdir(parents=True, exist_ok=True)
+        if not CFG_FILE.exists():
+            write_atomic(CFG_FILE, (DEFAULTS_DIR / "config.toml").read_text(encoding="utf-8"))
+            log.info("seeded config.toml")
+        marker = CONTENT / ".seeded"
+        if not marker.exists():
+            if not any(PAGES.glob("*.md")):
+                for f in sorted((DEFAULTS_DIR / "pages").glob("*.md")):
+                    write_atomic(PAGES / f.name, f.read_text(encoding="utf-8"))
+                    log.info("seeded pages/%s", f.name)
+            marker.write_text("h6082: initial content was copied; delete this file to copy the demo again\n")
+    except OSError as e:
+        log.warning("cannot seed content/ (%s) — continuing with defaults", e)
 
 
 def content_signature():
@@ -825,8 +871,12 @@ def files_markdown(cfg, which="all"):
         for name in sorted(SYSTEM_PAGES):
             p = page_path(cfg, name)
             if p:
+                custom = p.parent.parent == SYSTEM
+                note = (" · " if state(name) else "") + t(cfg, "st_custom") if custom else ""
+                reset = (f' <button class="del" data-file="{file_id(p)}" data-reset="1" '
+                         f'title="{html.escape(t(cfg, "reset_default"))}">↺</button>' if custom and ed else "")
                 lines.append(f"- {edit_links([p])} · [{html.escape(tab_label(cfg, name))} ↗](/{name}) "
-                             f"<small>{state(name)}</small>")
+                             f"<small>{state(name)}{note}</small>{reset}")
         cfg_link = "[config.toml](/edit/config.toml)" if ed else "`config.toml`"
         lines.append(f"- {cfg_link} <small>{t(cfg, 'st_config')}</small>")
     if len(lines) == 1:
@@ -1186,7 +1236,8 @@ window.h6082 = (() => {
     if (!b) return;
     e.preventDefault();
     const f = b.dataset.file;
-    if (!confirm(T.confirm_delete_file.replace('{f}', f))) return;
+    const ask = b.dataset.reset ? T.confirm_reset : T.confirm_delete_file;
+    if (!confirm(ask.replace('{f}', f))) return;
     const r = await api('/api/file?name=' + encodeURIComponent(f), {method: 'DELETE'});
     if (!r.ok) alert(r.j.error || r.status);
     else if (!window.EventSource || !document.querySelector('.live')) location.reload();
@@ -1954,6 +2005,7 @@ def build_history(cfg, tabs, fname, v):
 
 def write_atomic(path, text):
     """Write to a temp file in the same directory + rename: a file is never half-written."""
+    path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".", suffix=".part")
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
@@ -2241,7 +2293,7 @@ class Handler(BaseHTTPRequestHandler):
         """Against DNS rebinding: answer only to a Host from [api] allowed_hosts (healthcheck always)."""
         if urlsplit(self.path).path == "/healthz":
             return True
-        allowed = {str(h).lower() for h in load_config()["api"]["allowed_hosts"]}
+        allowed = allowed_hosts(load_config())
         host = urlsplit("//" + (self.headers.get("Host") or "")).hostname or ""
         if host.lower() in allowed:
             return True
@@ -2319,7 +2371,7 @@ class Handler(BaseHTTPRequestHandler):
         which the server never allows, so the browser blocks it)."""
         if editor and not cfg["editor"]["enabled"]:
             return t(cfg, "err_editor_off")
-        allowed = {str(h).lower() for h in cfg["api"]["allowed_hosts"]}
+        allowed = allowed_hosts(cfg)
         host = urlsplit("//" + (self.headers.get("Host") or "")).hostname or ""
         if host.lower() not in allowed:
             return t(cfg, "err_host", host=host)
@@ -2358,8 +2410,9 @@ class Handler(BaseHTTPRequestHandler):
             return self._themes_css()
         if path.startswith("/media/"):
             name = path[len("/media/"):]
-            f = MEDIA / name
-            if MEDIA_RE.match(name) and f.is_file() and f.resolve().parent == MEDIA.resolve():
+            f = MEDIA / name if (MEDIA / name).is_file() else DEFAULTS_DIR / "media" / name
+            if MEDIA_RE.match(name) and f.is_file() and f.resolve().parent in (MEDIA.resolve(),
+                                                                              (DEFAULTS_DIR / "media").resolve()):
                 # no-cache: own images change and the change should show at once
                 return self._send(200, f.read_bytes(), MIME.get(f.suffix.lower(), "application/octet-stream"))
             return self._send(404, b"404\n", "text/plain")
@@ -2414,7 +2467,7 @@ class Handler(BaseHTTPRequestHandler):
             p = editable_path(fname)
             if not cfg["editor"]["enabled"]:
                 code, body = 403, build_message(cfg, tabs, t(cfg, "msg_editor_disabled"))
-            elif p is None or not p.is_file():
+            elif p is None or not (p.is_file() or default_of(p)):
                 code, body = 404, build_message(cfg, tabs, t(cfg, "msg_not_editable", name=html.escape(fname)))
             else:
                 code, body = 200, build_editor(cfg, tabs, fname)
@@ -2427,9 +2480,10 @@ class Handler(BaseHTTPRequestHandler):
         if not self._auth_ok():
             return
         p = editable_path(fname)
-        if p is None or not p.is_file():
+        src = p if p is not None and p.is_file() else (default_of(p) if p is not None else None)
+        if src is None:
             return self._json(404, {"error": t(cfg, "err_file_missing")})
-        text = p.read_text(encoding="utf-8")
+        text = src.read_text(encoding="utf-8")
         warn = toml_warning(cfg, text) if p == CFG_FILE else None
         self._json(200, {"name": fname, "text": text, "mtime": str(mtime(p)), "warning": warn})
 
@@ -2675,6 +2729,16 @@ class Handler(BaseHTTPRequestHandler):
         p = editable_path(fname)
         if p is None or p == CFG_FILE or not p.is_file():
             return self._json(404, {"error": t(cfg, "err_file_missing")})
+        if fname.startswith("system/") and default_of(p):
+            with _lock:
+                try:
+                    TRASH.mkdir(exist_ok=True)
+                    dest = TRASH / f"{p.parent.name}-{p.stem}.{time.strftime('%Y%m%d-%H%M%S')}.md"
+                    os.replace(p, dest)
+                except OSError as e:
+                    return self._json(500, {"error": t(cfg, "err_delete_failed", e=e.strerror)})
+            log.info("reset %s to default (override -> %s)", fname, dest.relative_to(CONTENT))
+            return self._json(200, {"trash": [str(dest.relative_to(CONTENT))]})
         if fname.startswith("system/") or is_system(cfg, tab_of(fname)):
             return self._json(403, {"error": t(cfg, "err_system_delete", name=fname)})
         # base file -> the whole tab incl. translations; a translation -> only that file
@@ -2707,7 +2771,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         fname = parse_qs(u.query).get("name", [""])[0]
         p = editable_path(fname)
-        if p is None or not p.is_file():
+        if p is None or not (p.is_file() or default_of(p)):
             return self._json(404, {"error": t(cfg, "err_file_missing")})
         try:
             data = self._read_json(cfg)
@@ -2830,7 +2894,8 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    seed_content()
     threading.Thread(target=history_watcher, name="history", daemon=True).start()
-    log.info("content: %s, pages: %s, port %d, heslo editoru: %s",
+    log.info("content: %s, pages: %s, port %d, editor password: %s",
              CONTENT, PAGES, PORT, "yes" if EDITOR_PASSWORD else "NO (H6082_EDITOR_PASSWORD is not set)")
     ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()

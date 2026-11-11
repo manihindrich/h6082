@@ -29,4 +29,8 @@ USER app
 EXPOSE 8080
 HEALTHCHECK --interval=60s --timeout=3s CMD wget -qO- http://127.0.0.1:8080/healthz >/dev/null || exit 1
 
+# git revision of the build (set by the deploy workflow; used to skip unchanged builds)
+ARG REVISION=dev
+LABEL org.opencontainers.image.revision=$REVISION
+
 CMD ["python", "/app/server.py"]

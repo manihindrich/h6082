@@ -6,26 +6,27 @@ docker-compose.yml
 Dockerfile
 .env            (lokální, necommitovat)
 .env.example
-content/
-  config.toml
-  pages/*.md         tvoje záložky (+ překlady *.cs.md)
-  system/en/*.md     vestavěné stránky anglicky
-  system/cs/*.md     vestavěné stránky česky
-  media/             obrázky
 app/
   server.py
   static/
+  defaults/          součást image: vestavěné stránky, demo, obrázky, výchozí config
+content/             jen tvoje data — aktualizace na ně nikdy nesáhne
+  config.toml        tvoje konfigurace (při prvním startu zkopírovaná z výchozí)
+  pages/*.md         tvoje záložky (+ překlady *.cs.md)
+  system/<jazyk>/    tvoje upravené vestavěné stránky (volitelné)
+  media/             tvoje obrázky
 ```
 - `docker-compose.yml`: kontejner a jeho zpřísnění
 - `.env`: lokální nastavení a heslo editoru, vzor je `.env.example`. Je v `.gitignore`.
 - `config.toml`: konfigurace (tato záložka)
+- `app/defaults/`: co přichází s aplikací — vestavěné stránky h6082, markdown a config v každém jazyce, demo záložka, její obrázky a výchozí `config.toml`
 - `pages/*.md`: tvoje záložky, k nim volitelné překlady `jmeno.cs.md` a `jmeno.en.md` (viz Jazyky)
-- `system/<jazyk>/`: vestavěné stránky h6082, markdown a config v každém jazyce
+- `system/<jazyk>/`: tvoje vlastní kopie vestavěných stránek, vzniknou uložením v editoru
 - `server.py`: generátor, HTTP server, API (editor, kontroly, RSS)
 - `.trash/`: smazané soubory, vznikne při prvním smazání
 - `.history/`: verze souborů, vznikne při první změně
 - `static/`: CSS, font, ikony aplikace
-- `media/`: vlastní obrázky pro záložky (`/media/<soubor>`)
+- `media/`: vlastní obrázky pro záložky (`/media/<soubor>`); stejnojmenné soubory z `app/defaults/media/` slouží jako záloha
 
 Složka `content/` je do kontejneru připojená pro zápis, aby do ní mohl ukládat webový editor. Kontejner běží pod UID:GID z `.env`, takže soubory zůstávají tvoje. Změny `app/` vyžadují rebuild.
 
@@ -50,11 +51,29 @@ H6082_BIND=127.0.0.1    # jen tento počítač
 H6082_PORT=8088
 H6082_EDITOR_USER=h6082
 H6082_EDITOR_PASSWORD=… # openssl rand -base64 24
+H6082_ALLOWED_HOSTS=    # další hostnames, např. doména za reverzní proxy
 H6082_DISK_ROOT=/var/empty
 ```
 Po změně `.env` spusť `docker compose up -d`. Zpřístupnění do sítě popisuje blok Bezpečnost na stránce [h6082](/h6082).
 
 `extra_hosts: host.docker.internal:host-gateway` umožní kontrolovat služby běžící přímo na hostiteli. Služba ale musí poslouchat i na docker bridge, ne jen na `127.0.0.1`.
+
+## Aktualizace
+Aktualizace vymění jen aplikaci (image). **Tvoje data v `content/` a `.env` zůstanou beze změny**:
+
+| část | po aktualizaci |
+|---|---|
+| tvoje záložky, poznámky, úkoly | beze změny |
+| `content/config.toml` | beze změny; nové volby mají výchozí hodnotu, dokud je nenastavíš |
+| vestavěné stránky (h6082, markdown, config) | nová verze z image |
+| tvoje upravená vestavěná stránka | zůstane tvoje; ↺ na stránce h6082 vrátí novou výchozí |
+| demo záložka | zkopíruje se jen při úplně prvním startu (značka `content/.seeded`), nikdy znovu |
+
+První start s prázdným `content/`: zkopíruje se sem výchozí `config.toml` a demo záložka. Smazané demo se proto už nevrátí.
+
+Nasazení přidá svou doménu proměnnou prostředí `H6082_ALLOWED_HOSTS` (čárkami oddělené), místo úpravy `[api] allowed_hosts` ve tvém configu.
+
+Aktualizace: `git pull && docker compose up -d --build`. Na serveru to dělá deploy workflow (repozitář `h6082-deploy`).
 
 ## Živé změny
 Otevřená stránka se po uložení sama obnoví, typicky do 0,5 s (`live_reload`). Server hlídá čas změny souborů v `content/` a pošle prohlížeči zprávu přes SSE (`/events`). Ten vymění obsah bez probliknutí a scroll zůstane.
@@ -62,7 +81,7 @@ Otevřená stránka se po uložení sama obnoví, typicky do 0,5 s (`live_reload
 Zelená tečka vpravo nahoře = spojení je aktivní. Po restartu kontejneru se obnoví samo. Za reverzní proxy je potřeba vypnout buffering pro `/events`.
 
 Bez živého obnovení se při každém requestu kontroluje čas změny souborů:
-- `pages/*.md` a `system/*/*.md` → přegeneruje se záložka
+- `pages/*.md` a `system/*/*.md` → přegeneruje se záložka (nový image přegeneruje vše)
 - `config.toml` → přegenerují se všechny záložky
 - nový nebo smazaný `.md` → změní se lišta záložek
 
@@ -159,7 +178,7 @@ Přehled je v bloku Bezpečnost na stránce [h6082](/h6082). Technické detaily:
 - zápis je atomický přes dočasný soubor a přejmenování, soubor nikdy nezůstane napůl zapsaný
 - kontrola souběhu: změnu provedenou jinde editor nepřepíše
 - limit velikosti `max_size_kb`
-- systémové soubory (`h6082`, `showcase`, `docs`, `config.toml`) nejdou smazat; mazání je jen přesun do `content/.trash/`
+- systémové soubory (`h6082`, `showcase`, `docs`, `config.toml`) nejdou smazat, jen tvoji kopii vestavěné stránky jde vrátit na výchozí; mazání je jen přesun do `content/.trash/`
 - `/api/check` a `/api/rss` pracují jen s cíli a feedy, které jsou napsané v md souborech, takže server nejde zneužít ke skenování sítě
 - RSS se parsuje přes `defusedxml` (ochrana proti XML bombám a externím entitám). Do stránky se dostanou jen `http(s)` odkazy, vložené jako text, ne jako HTML.
 - kontroly a RSS následují přesměrování jen na `http(s)` a nejvýš 3×
