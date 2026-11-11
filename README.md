@@ -12,6 +12,8 @@
   &nbsp;·&nbsp;
   <a href="#features">Features</a>
   &nbsp;·&nbsp;
+  <a href="#a-look-inside">Screenshots</a>
+  &nbsp;·&nbsp;
   <a href="#security">Security</a>
 </p>
 
@@ -70,6 +72,28 @@ That is the whole format. Save the file and every open browser tab refreshes its
 <p align="center">
   <img src="docs/screenshot-light.png" alt="the same tab in the light catppuccin latte theme" width="100%">
   <br><sub>The same tab in the light <i>catppuccin latte</i> theme.</sub>
+</p>
+
+## A look inside
+
+The documentation is not a wiki somewhere else — it is part of the page, written in the same markdown.
+
+<p align="center">
+  <img src="docs/screenshot-h6082.png" alt="the h6082 page: overview, theme and language, your files, editor, installation and security" width="100%">
+  <br><sub><b>h6082</b> — the control page at the top right: overview, theme and language pickers, your files with
+  editor links, installation, maintenance and security notes.</sub>
+</p>
+
+<p align="center">
+  <img src="docs/screenshot-markdown.png" alt="the markdown tab: every element with a live example and its source" width="100%">
+  <br><sub><b>markdown</b> — every element with a live example next to its source: blocks, text styles, links,
+  tasks, tables, code, callouts, notes, service status, server stats, history and RSS.</sub>
+</p>
+
+<p align="center">
+  <img src="docs/screenshot-config.png" alt="the config tab: file layout, endpoints, security and every config option" width="100%">
+  <br><sub><b>config</b> — operation and configuration: file layout, updates, endpoints, security and every
+  option of <code>config.toml</code> with its default.</sub>
 </p>
 
 ## Quick start
