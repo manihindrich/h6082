@@ -35,6 +35,8 @@ from urllib.parse import parse_qs, quote, unquote, urlsplit
 
 import defusedxml.ElementTree as SafeET
 import markdown
+from markdown.extensions import Extension
+from markdown.treeprocessors import Treeprocessor
 from pygments.formatters import HtmlFormatter
 from pygments.styles import get_all_styles
 
@@ -282,6 +284,7 @@ STRINGS = {
         "history_disabled": "history is disabled ([history] enabled)",
         "editor_disabled_small": "the editor is disabled",
         "live_title": "live reload",
+        "insecure_link": "unencrypted connection (http)",
         "note_aria": "note",
         "task_done_aria": "done",
         "task_delete": "delete task",
@@ -398,6 +401,7 @@ STRINGS = {
         "history_disabled": "historie je vypnutá ([history] enabled)",
         "editor_disabled_small": "editor je vypnutý",
         "live_title": "živé obnovení",
+        "insecure_link": "nešifrované spojení (http)",
         "note_aria": "poznámka",
         "task_done_aria": "hotovo",
         "task_delete": "smazat úkol",
@@ -1081,9 +1085,40 @@ def separate_blocks(text):
     return "\n".join(out)
 
 
+class _LinkTidy(Treeprocessor):
+    """Bare URLs show without the scheme and trailing slash (https://a.cz/b/ -> a.cz/b);
+    links to http:// get class="insecure" (a warning mark in CSS) and a title."""
+    def __init__(self, md, title):
+        super().__init__(md)
+        self.title = title
+
+    def run(self, root):
+        for a in root.iter("a"):
+            href = a.get("href") or ""
+            low = href.lower()
+            if not low.startswith(("http://", "https://")):
+                continue
+            if len(a) == 0 and a.text and a.text.strip() == href:
+                short = href.split("://", 1)[1]
+                a.text = markdown.util.AtomicString(short[:-1] if short.endswith("/") else short)
+            if low.startswith("http://"):
+                a.set("class", (a.get("class", "") + " insecure").strip())
+                a.set("title", a.get("title") or self.title)
+
+
+class _LinkTidyExt(Extension):
+    def __init__(self, title):
+        super().__init__()
+        self.title = title
+
+    def extendMarkdown(self, md):
+        md.treeprocessors.register(_LinkTidy(md, self.title), "h6082_links", 1)
+
+
 def make_md(cfg):
     return markdown.Markdown(
         extensions=[
+            _LinkTidyExt(t(cfg, "insecure_link")),
             "extra",            # tabulky, abbr, def_list, footnotes, attr_list, md_in_html
             "sane_lists",
             "admonition",       # !!! note "Titulek"

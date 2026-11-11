@@ -417,3 +417,11 @@ form.task-add input::placeholder { color: var(--muted); opacity: .7; }
 .lang-pick { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0; }
 .lang-btn { padding: 2px 12px; }
 .lang-btn.active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, var(--bg)); color: var(--text); }
+
+/* ---- links to http:// (unencrypted) ------------------------------------ */
+a.insecure::after {
+  content: "⚠";
+  margin-left: .2em;
+  font-size: .8em;
+  color: var(--callout-warning);
+}
