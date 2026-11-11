@@ -1498,7 +1498,130 @@ window.h6082 = (() => {
 })();
 </script>"""
 
+# Smart typing in the editor textarea: auto-paired brackets and quotes, list / quote
+# continuation on Enter, ``` fences, Tab / Shift+Tab indentation. Edits go through
+# execCommand('insertText') so Ctrl+Z keeps working. Markdown rules only for .md files.
+SMART_JS = r"""
+function smartEditor(ta, MD) {
+  const PAIRS = {'(': ')', '[': ']', '{': '}', '<': '>', '"': '"', "'": "'", '`': '`'};
+  const CLOSERS = new Set(Object.values(PAIRS));
+  const FENCE = /^[ \t]*(```|~~~)/;
+  let ltAuto = -1;  // position of a '>' we inserted right after '<'
+
+  // replace [from, to) with text, then select from+a .. from+b
+  function put(text, from, to, a, b = a) {
+    ta.focus();
+    ta.setSelectionRange(from, to);
+    const ok = text ? document.execCommand('insertText', false, text)
+                    : (from === to || document.execCommand('delete'));
+    if (!ok) {
+      ta.setRangeText(text, from, to, 'end');
+      ta.dispatchEvent(new Event('input', {bubbles: true}));
+    }
+    ta.setSelectionRange(from + a, from + b);
+  }
+  const lineStart = (v, p) => v.lastIndexOf('\n', p - 1) + 1;
+  const lineEnd = (v, p) => { const i = v.indexOf('\n', p); return i < 0 ? v.length : i; };
+  const fencesIn = (text) => text.split('\n').filter((l) => FENCE.test(l)).length;
+  const LIST = /^((?:[ \t]*>[ \t]?)*[ \t]*)([-*+]|(\d{1,9})([.)]))([ \t]+)(\[[ xX]\][ \t]+)?/;
+  const QUOTE = /^[ \t]*(?:>[ \t]?)+/;
+
+  function enter(v, s, en, ls) {
+    const before = v.slice(ls, s), after = v.slice(en, lineEnd(v, en));
+    const inCode = MD && fencesIn(v.slice(0, ls)) % 2 === 1;
+    if (MD && !inCode) {
+      const f = /^([ \t]*)(`{3,}|~{3,})[^`]*$/.exec(before);
+      if (f && s === en && !after.trim() && fencesIn(v.slice(lineEnd(v, s))) % 2 === 0) {
+        const mid = '\n' + f[1];
+        put(mid + '\n' + f[1] + f[2], s, en, mid.length);
+        return true;
+      }
+      const m = LIST.exec(before);
+      if (m) {
+        if (before.length === m[0].length && !after.trim()) { put('', ls, lineEnd(v, en), 0); return true; }
+        const mark = m[3] ? (Number(m[3]) + 1) + m[4] : m[2];
+        const text = '\n' + m[1] + mark + m[5] + (m[6] ? '[ ] ' : '');
+        put(text, s, en, text.length);
+        return true;
+      }
+      const q = QUOTE.exec(before);
+      if (q) {
+        if (!before.slice(q[0].length).trim() && !after.trim()) { put('', ls, lineEnd(v, en), 0); return true; }
+        const text = '\n' + q[0].replace(/>$/, '> ');
+        put(text, s, en, text.length);
+        return true;
+      }
+    }
+    const ind = /^[ \t]*/.exec(before)[0];
+    if (!ind) return false;
+    put('\n' + ind, s, en, 1 + ind.length);
+    return true;
+  }
+
+  function tab(v, s, en, ls, back) {
+    const unit = MD ? '  ' : '    ';
+    if (s !== en && v.slice(s, en).includes('\n')) {  // block indent / outdent of whole lines
+      const le = lineEnd(v, en > s && v[en - 1] === '\n' ? en - 1 : en);
+      const lines = v.slice(ls, le).split('\n');
+      const out = lines.map((l) => back ? l.replace(new RegExp('^(\\t| {1,' + unit.length + '})'), '') : unit + l).join('\n');
+      put(out, ls, le, 0, out.length);
+      return;
+    }
+    const m = MD ? LIST.exec(v.slice(ls, lineEnd(v, ls))) : null;
+    if (back) {
+      const width = m ? (m[2] + m[5]).length : 4;
+      const lead = /^ */.exec(v.slice(ls))[0].length;
+      const n = Math.min(width, lead);
+      if (!n) return;
+      put('', ls, ls + n, 0);
+      ta.setSelectionRange(Math.max(ls, s - n), Math.max(ls, en - n));
+    } else if (m && s === en) {
+      const ind = ' '.repeat((m[2] + m[5]).length), at = ls + m[1].length;
+      put(ind, at, at, 0);
+      ta.setSelectionRange(s + ind.length, s + ind.length);
+    } else {
+      put('    ', s, en, 4);
+    }
+  }
+
+  ta.addEventListener('keydown', (e) => {
+    if (e.isComposing || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
+    const v = ta.value, s = ta.selectionStart, en = ta.selectionEnd, k = e.key;
+    const ls = lineStart(v, s), prev = v[s - 1] || '', next = v[en] || '';
+    const lt = ltAuto; ltAuto = -1;
+
+    if (k === 'Enter') {
+      if (!e.shiftKey && enter(v, s, en, ls)) e.preventDefault();
+      return;
+    }
+    if (k === 'Tab') { e.preventDefault(); tab(v, s, en, ls, e.shiftKey); return; }
+    if (k === 'Backspace') {
+      if (s === en && PAIRS[prev] && PAIRS[prev] === next) { e.preventDefault(); put('', s - 1, s + 1, 0); }
+      return;
+    }
+    if (k.length !== 1) return;
+    // "a < b", "<=": drop the '>' we paired with '<' a moment ago
+    if (s === en && lt === s && prev === '<' && next === '>' && (k === ' ' || k === '=')) {
+      e.preventDefault(); put('<' + k, s - 1, s + 1, 2); return;
+    }
+    // typing a closer that is already there just steps over it
+    if (s === en && CLOSERS.has(k) && next === k) { e.preventDefault(); ta.setSelectionRange(s + 1, s + 1); return; }
+    const c = PAIRS[k];
+    if (!c) return;
+    if (s !== en) {  // wrap the selection
+      e.preventDefault(); put(k + v.slice(s, en) + c, s, en, 1, 1 + en - s); return;
+    }
+    if (c === k && /[\p{L}\p{N}`]/u.test(prev)) return;    // don't, it's, ```
+    if (next && !/[\s)\]}>.,;:!?'"`*_~]/.test(next)) return;  // right before a word
+    e.preventDefault();
+    put(k + c, s, s, 1);
+    if (k === '<') ltAuto = s + 1;
+  });
+}
+"""
+
 EDITOR_JS = """<script nonce="__NONCE__">
+__SMART__
 (() => {
   const T = __T__;
   const NAME = __NAME__, DELAY = __DELAY__;
@@ -1550,11 +1673,8 @@ EDITOR_JS = """<script nonce="__NONCE__">
   });
   ta.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); save(); }
-    else if (e.key === 'Tab' && !e.shiftKey && !e.ctrlKey && !e.altKey) {
-      e.preventDefault();
-      if (!document.execCommand('insertText', false, '    ')) ta.setRangeText('    ', ta.selectionStart, ta.selectionEnd, 'end');
-    }
   });
+  smartEditor(ta, /\\.md$/i.test(NAME));
   document.getElementById('reload').onclick = () => { if (!dirty() || confirm(T.confirm_discard)) load(); };
   document.getElementById('force').onclick = () => { if (confirm(T.confirm_overwrite)) save(true); };
   window.addEventListener('beforeunload', (e) => { if (dirty()) { save(); e.preventDefault(); e.returnValue = ''; } });
@@ -1779,7 +1899,7 @@ def build_editor(cfg, tabs, fname):
     {iframe}
   </div>
 </div>"""
-    js = EDITOR_JS.replace("__NAME__", json.dumps(fname)).replace("__DELAY__", str(int(cfg["editor"]["autosave_ms"])))
+    js = EDITOR_JS.replace("__SMART__", SMART_JS).replace("__NAME__", json.dumps(fname)).replace("__DELAY__", str(int(cfg["editor"]["autosave_ms"])))
     return page(cfg, f"✎ {fname} · {cfg['page']['title']}", body, js, "editing")
 
 
