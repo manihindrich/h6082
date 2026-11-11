@@ -1679,6 +1679,17 @@ function smartEditor(ta, MD) {
     }
   }
 
+  // pasting a URL over selected text makes a link: [text](url)
+  ta.addEventListener('paste', (e) => {
+    if (!MD) return;
+    const s = ta.selectionStart, en = ta.selectionEnd, sel = ta.value.slice(s, en);
+    const url = (e.clipboardData && e.clipboardData.getData('text/plain') || '').trim();
+    if (s === en || sel.includes('\n') || !/^https?:\/\/\S+$/i.test(url) || /^https?:\/\//i.test(sel.trim())) return;
+    e.preventDefault();
+    const link = '[' + sel + '](' + url + ')';
+    put(link, s, en, link.length);
+  });
+
   ta.addEventListener('keydown', (e) => {
     if (e.isComposing || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
     const v = ta.value, s = ta.selectionStart, en = ta.selectionEnd, k = e.key;
