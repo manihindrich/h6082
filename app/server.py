@@ -1050,6 +1050,66 @@ def convert_callouts(text):
     return "\n".join(out)
 
 
+LIST_ITEM_RE = re.compile(r"^( *)([-*+]|\d{1,9}[.)])( |$)")
+QUOTE_PFX_RE = re.compile(r"^((?:> ?)*)")
+
+
+def _reindent(body, shift):
+    if shift >= 0:
+        return " " * shift + body
+    n = len(body) - len(body.lstrip(" "))
+    return body[min(n, -shift):]
+
+
+def nest_lists(text):
+    """Nested lists by 2 spaces (like GitHub/Obsidian): list items are re-indented by their
+    structure to 4 spaces per level, which Python-Markdown requires. An item indented by at
+    least 2 more than the item above is its child; continuation lines move with their item."""
+    out, stack, fence, shift, prev_pfx, blank = [], [], None, 0, "", True
+    for line in text.split("\n"):
+        pfx = QUOTE_PFX_RE.match(line).group(1)
+        body = line[len(pfx):]
+        if pfx != prev_pfx and not fence:
+            stack, prev_pfx = [], pfx
+        if fence:  # inside a fenced block: only move it with its list item
+            out.append(pfx + _reindent(body, shift))
+            m = FENCE_RE.match(body)
+            if m and m.group(1)[0] == fence[0] and len(m.group(1)) >= len(fence):
+                fence = None
+            continue
+        if not body.strip():
+            out.append(line)
+            blank = True
+            continue
+        ind = len(body) - len(body.lstrip(" "))
+        item = LIST_ITEM_RE.match(body)
+        if item and (stack or ind < 4):
+            while stack and stack[-1][0] > ind:
+                stack.pop()
+            content = len(item.group(0)) if item.group(3) else ind + len(item.group(2)) + 1
+            if stack and ind < stack[-1][0] + 2:      # sibling
+                new = stack[-1][1]
+                stack[-1] = (ind, new, content)
+            else:                                     # child (or the first item)
+                new = stack[-1][1] + 4 if stack else 0
+                stack.append((ind, new, content))
+            shift = new - ind
+            out.append(pfx + _reindent(body, shift))
+        elif stack and ind > 0:                       # continuation of an item
+            # to the content column of its item (4 past the item's new indent)
+            shift = next((nw + 4 + max(0, ind - c) - ind for old, nw, c in reversed(stack) if old < ind), 0)
+            out.append(pfx + _reindent(body, shift))
+        else:
+            if blank:
+                stack = []
+            shift = 0
+            out.append(line)
+        if m := FENCE_RE.match(body):
+            fence = m.group(1)
+        blank = False
+    return "\n".join(out)
+
+
 def _line_kind(line):
     if not line.strip():
         return "blank"
@@ -1148,7 +1208,7 @@ def make_md(cfg):
 
 def render_md(md, text):
     md.reset()
-    return md.convert(separate_blocks(convert_callouts(text)))
+    return md.convert(separate_blocks(nest_lists(convert_callouts(text))))
 
 
 def _split_heading(htm, level):
