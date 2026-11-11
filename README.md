@@ -1,13 +1,17 @@
 <h1 align="center">h6082</h1>
 
 <p align="center">
-  <b>Your start page, written in markdown.</b><br>
-  Links, notes, tasks, live service status and feeds — in plain text files you own.
+  <b>A self-hosted homepage and dashboard written in markdown.</b>
 </p>
 
 <p align="center">
-  <a href="https://h.6082.cz/"><b>▶&nbsp;Live demo — h.6082.cz</b></a>
-  &nbsp;·&nbsp;
+  A lightweight alternative to <b>Homepage</b>, <b>Homer</b>, <b>Dashy</b> and <b>Heimdall</b>.<br>
+  No database&nbsp;·&nbsp;no YAML sprawl&nbsp;·&nbsp;no JS framework — every tab is a markdown file you own.
+</p>
+
+<p align="center">
+  <a href="https://h.6082.cz/"><b>▶&nbsp;&nbsp;Try the live demo</b></a>
+  &nbsp;&nbsp;|&nbsp;&nbsp;
   <a href="#quick-start">Quick start</a>
   &nbsp;·&nbsp;
   <a href="#features">Features</a>
@@ -17,10 +21,16 @@
   <a href="#security">Security</a>
 </p>
 
-**A self-hosted homepage and dashboard written in markdown.**
-Lightweight alternative to Homepage, Homer, Dashy and Heimdall: no database, no YAML sprawl, no JS framework. Every tab is a markdown file you own.
-
-Bookmarks, service status monitoring (HTTP/TCP), RSS feeds, server stats, tasks and notes on one page. Runs as a single Docker container, live reload, built-in web editor.
+<p align="center">
+  <code>🔖&nbsp;bookmarks</code>&nbsp;
+  <code>🟢&nbsp;HTTP/TCP&nbsp;status</code>&nbsp;
+  <code>📰&nbsp;RSS&nbsp;feeds</code>&nbsp;
+  <code>🖥️&nbsp;server&nbsp;stats</code>&nbsp;
+  <code>☑️&nbsp;tasks</code>&nbsp;
+  <code>📝&nbsp;notes</code>
+  <br>
+  <sub>All on one page &nbsp;·&nbsp; a single Docker container &nbsp;·&nbsp; live reload &nbsp;·&nbsp; built-in web editor</sub>
+</p>
 
 <p align="center">
   <a href="https://h.6082.cz/"><img src="docs/screenshot-dark.png" alt="h6082 demo tab in the dark obsidian theme" width="100%"></a>
