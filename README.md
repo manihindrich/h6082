@@ -17,6 +17,11 @@
   <a href="#security">Security</a>
 </p>
 
+**A self-hosted homepage and dashboard written in markdown.**
+Lightweight alternative to Homepage, Homer, Dashy and Heimdall: no database, no YAML sprawl, no JS framework. Every tab is a markdown file you own.
+
+Bookmarks, service status monitoring (HTTP/TCP), RSS feeds, server stats, tasks and notes on one page. Runs as a single Docker container, live reload, built-in web editor.
+
 <p align="center">
   <a href="https://h.6082.cz/"><img src="docs/screenshot-dark.png" alt="h6082 demo tab in the dark obsidian theme" width="100%"></a>
 </p>
