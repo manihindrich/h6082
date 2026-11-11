@@ -1,0 +1,10 @@
+# local settings and passwords
+.env
+# files deleted in the editor
+content/.trash/
+# file version history (may contain deleted content)
+content/.history/
+# Claude Code session files
+.claude/
+__pycache__/
+*.pyc

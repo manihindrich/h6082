@@ -1,0 +1,4 @@
+# only what the image needs goes into the build context (no .env, content/, .claude/)
+*
+!app/
+!Dockerfile

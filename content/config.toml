@@ -1,0 +1,144 @@
+# h6082 — configuration
+# Changes apply after a page reload (no container restart needed).
+# Missing keys take their default value, unknown keys are ignored (warning in the log).
+# On a syntax error the last working configuration stays in effect.
+# Full description: the "config" tab (content/system/<lang>/docs.md).
+
+[page]
+title         = "h6082"    # browser tab title (with several tabs: "<tab> · <title>")
+favicon       = "◆"        # one character / emoji, rendered as the browser tab icon
+lang          = "en"       # UI and built-in pages language: en | cs (also set by the Language block on h6082)
+links_new_tab = true       # open external links (http/https) in a new tab
+header        = "**h6082** · demo"   # header on the left of the top bar (inline markdown); "" = none
+live_reload   = true       # the page refreshes itself after an .md / config save
+about_tab     = "h6082"    # tab at the top right (built-in page h6082) — info, files, editor; "" = none
+
+[tabs]
+# Each content/pages/*.md is one tab; the name = file name without .md.
+# name.cs.md / name.en.md is a translation of name.md, shown according to [page] lang.
+# User tabs are on the left; the about tab ([page] about_tab) is on the right.
+order       = ["demo"]     # order from the left, e.g. ["dev", "infra"]; other files follow alphabetically
+# tab labels (default = file name); a plain string, or one label per language
+labels      = { showcase = "markdown", docs = "config", demo = { en = "demo tab", cs = "demo záložka" } }
+hidden      = []           # hidden from the bar, still reachable via /<name> and from the h6082 page
+show_single = true         # show the bar even with a single user tab
+
+[editor]
+# Web editor for files (/edit/<file>). The editor password is set in .env (H6082_EDITOR_PASSWORD),
+# not in this file. Without a password keep the port on 127.0.0.1 only.
+enabled     = true
+autosave_ms = 800          # autosave delay after the last key press
+max_size_kb = 1024         # max. size of a saved file
+
+[api]
+allowed_hosts = ["127.0.0.1", "localhost"]    # Host the server answers to and Origin for /api (against DNS rebinding)
+
+[checks]
+# Service status: a link with {.check} (checks its href) or {check="tcp://host:port"}.
+# Checked by the server from the container — services on the host: host.docker.internal.
+enabled    = true
+interval_s = 60            # how often the status refreshes
+timeout_s  = 4             # timeout of a single check
+verify_tls = false         # false = self-signed certificates pass too (homelab)
+
+[rss]
+# Feed block: a line {{rss https://… [count]}}
+enabled       = true
+refresh_min   = 15         # how long a feed stays cached
+timeout_s     = 8          # feed download timeout
+default_limit = 10         # number of items when not given
+
+[theme]
+# The active theme is `default`. The picker on the h6082 page (Theme block) writes here.
+# Built-in: obsidian (= [colors] below), nord, dracula, gruvbox-dark, solarized-dark,
+# catppuccin-mocha, tokyo-night, obsidian-light, gruvbox-light, solarized-light,
+# catppuccin-latte, paper; "auto" = follows the OS (auto_dark / auto_light).
+default    = "obsidian"        # active theme (or "auto")
+auto_dark  = "obsidian"        # theme for "auto" with a dark OS
+auto_light = "obsidian-light"  # theme for "auto" with a light OS
+
+# Custom theme (or a tweak of a built-in one): keys as in [colors] + scheme, label, pygments_style.
+# Missing colours are taken from obsidian.
+# [themes.mine]
+# label          = "mine"
+# scheme         = "light"
+# pygments_style = "friendly"
+# bg = "#fafafa"
+# panel = "#ffffff"
+# text = "#202020"
+
+[history]
+# Change history: the state of a file before a change is stored in content/.history/.
+# List of versions, diff and restore: the "history" link in the editor. Block: {{history [file] [count] [demo]}}.
+#
+# DEMO MODE: {{history 5 demo}} shows made-up changes (invented files and times) right
+# in the browser, without asking the server. Used in examples (demo, showcase) so the page
+# does not reveal the names of your files and when you edit them.
+# Real history: remove the word `demo` from the block → {{history 5}}.
+enabled      = true
+coalesce_min = 5           # edits within this many minutes of the last version are merged into one
+max_versions = 50          # max. versions per file (the 3 newest always stay)
+max_age_days = 90          # older versions are deleted
+
+[system]
+# Server stats: a line {{sys}} or only selected parts, e.g. {{sys cpu mem disk}}.
+# Parts: cpu mem swap load temp uptime disk. Reads only the host's /proc and /sys.
+#
+# DEMO MODE: {{sys demo}} (also with parts, e.g. {{sys cpu mem demo}}) shows made-up values
+# right in the browser, without asking the server. Works even with enabled = false.
+# Off by default, because /api/sys would reveal server data (load, RAM, disks, uptime,
+# temperature) to anyone with access to the page.
+# Real values: 1) enabled = true  2) remove the word `demo` from the block → {{sys cpu mem disk}}.
+enabled    = false
+interval_s = 5             # how often the values refresh
+temps      = []            # thermal zone types to show; [] = automatic (x86_pkg_temp, otherwise the maximum)
+# disks: path = a directory inside the container on that disk (see volumes in docker-compose.yml)
+disks = [
+  { label = "/", path = "/host/disk/root" },
+  # { label = "content", path = "/app/content" },   # the disk the content/ folder lives on
+]
+
+[layout]
+columns_fixed    = 0               # 0 = number of columns by window width; N = always N columns
+column_min_width = "240px"         # min. column width in automatic mode
+page_max_width   = "1600px"        # max. content width ("none" = full width)
+padding          = "14px"          # page margin
+gap              = "12px"          # space between columns and below the tab bar
+block_gap        = "10px"          # vertical space between blocks (##) in a column
+block_padding    = "6px 10px 8px"  # inner padding of a block (CSS padding)
+radius           = "6px"           # corner radius of blocks and tabs
+h3_indent        = "2px"           # indentation of ### headings in a block
+content_indent   = "10px"          # indentation of the content under ### headings
+
+[font]
+family                = '"JetBrains Mono", ui-monospace, Menlo, Consolas, monospace'  # JetBrains Mono is bundled in the image
+size                  = "13px"     # base font size
+line_height           = "1.4"      # line height
+block_title_transform = "none"     # block titles (##): none | uppercase | lowercase | capitalize
+
+[colors]
+# Colours of the default "obsidian" theme.
+bg           = "#1e1e1e"   # page background
+panel        = "#262626"   # background of blocks and the active tab
+border       = "#363636"   # borders of blocks, tables, code, ---
+text         = "#dcddde"   # body text
+muted        = "#999999"   # muted text (bullets, quotes, inactive tabs)
+accent       = "#a882ff"   # active tab line, checkboxes, text selection, footnote links
+h2           = "#a882ff"   # block titles (##)
+h3           = "#c6b6ff"   # ### headings, table headers, definition terms
+link         = "#8a9cff"   # links
+link_hover   = "#b5c0ff"   # links on hover
+code_bg      = "#2b2b2b"   # background of code, <kbd>, table headers
+code_fg      = "#e0a96d"   # inline code colour
+mark_bg      = "#6b5a1e"   # ==highlight== background
+quote_border = "#555555"   # left line of quotes
+callout_note    = "#448aff"  # [!note], abstract, quote, example, unknown types
+callout_tip     = "#00bfa5"  # [!tip], hint, important, success
+callout_info    = "#00b8d4"  # [!info], todo, question, faq
+callout_warning = "#ff9100"  # [!warning], caution, attention
+callout_danger  = "#ff5252"  # [!danger], error, bug, failure
+
+[code]
+pygments_style = "monokai"   # code block scheme: monokai, dracula, one-dark, nord, gruvbox-dark, material, github-dark, …
+line_numbers   = false       # line numbers in all code blocks
+wrap           = true        # wrap long code lines (false = horizontal scrollbar)
