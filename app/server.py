@@ -270,11 +270,9 @@ STRINGS = {
         "st_hidden": "hidden",
         "st_config": "configuration",
         "st_custom": "customised",
-        "reset_default": "reset to the default version",
         "no_files": "no files",
         "newfile_placeholder": "name",
         "newfile_button": "create",
-        "delete_file": "delete {name}",
         "rss_disabled": "RSS is disabled ([rss] enabled)",
         "rss_bad": "{{rss}}: missing or invalid feed URL",
         "loading_feed": "loading feed…",
@@ -296,6 +294,16 @@ STRINGS = {
         "ed_reload": "reload from file",
         "ed_force": "overwrite",
         "ed_back": "back",
+        "ed_rename": "rename",
+        "ed_delete": "delete",
+        "ed_reset": "reset to default",
+        "f_view": "view ↗",
+        "f_edit": "edit",
+        "f_edit_lang": "edit {lang}",
+        "err_rename_target": "a tab can't be renamed to a translation name (name.{lang})",
+        "warn_rename_config": "config.toml still refers to {old} — it could not be updated automatically, change it by hand",
+        "js_rename_prompt": "New name (without .md). Translations are renamed with the tab:",
+        "js_rename_unsaved": "save the file first (conflict / error)",
         "msg_no_pages": "There is no <code>.md</code> file in <code>content/pages/</code>.",
         "msg_no_tab": "Tab <code>{name}</code> does not exist.",
         "msg_editor_disabled": "The editor is disabled (<code>[editor] enabled = false</code>).",
@@ -389,11 +397,9 @@ STRINGS = {
         "st_hidden": "skrytá",
         "st_config": "konfigurace",
         "st_custom": "upraveno",
-        "reset_default": "vrátit výchozí verzi",
         "no_files": "žádné soubory",
         "newfile_placeholder": "název",
         "newfile_button": "vytvořit",
-        "delete_file": "smazat {name}",
         "rss_disabled": "RSS je vypnuté ([rss] enabled)",
         "rss_bad": "{{rss}}: chybí nebo je neplatná URL feedu",
         "loading_feed": "načítám feed…",
@@ -415,6 +421,16 @@ STRINGS = {
         "ed_reload": "načíst ze souboru",
         "ed_force": "přepsat",
         "ed_back": "zpět",
+        "ed_rename": "přejmenovat",
+        "ed_delete": "smazat",
+        "ed_reset": "vrátit výchozí",
+        "f_view": "zobrazit ↗",
+        "f_edit": "upravit",
+        "f_edit_lang": "upravit {lang}",
+        "err_rename_target": "záložku nejde přejmenovat na název překladu (jméno.{lang})",
+        "warn_rename_config": "config.toml dál odkazuje na {old} — automaticky ho nešlo upravit, změň ho ručně",
+        "js_rename_prompt": "Nový název (bez .md). Překlady se přejmenují se záložkou:",
+        "js_rename_unsaved": "nejdřív soubor ulož (konflikt / chyba)",
         "msg_no_pages": "Ve složce <code>content/pages/</code> není žádný <code>.md</code> soubor.",
         "msg_no_tab": "Záložka <code>{name}</code> neexistuje.",
         "msg_editor_disabled": "Editor je vypnutý (<code>[editor] enabled = false</code>).",
@@ -879,8 +895,8 @@ def is_system(cfg, stem):
 
 
 def files_markdown(cfg, which="all"):
-    """Shortcode {{files [system|user]}}: list of files with links to the editor.
-    User tabs get a delete button (moves the file and its translations to content/.trash/)."""
+    """Shortcode {{files [system|user]}}: compact rows "name · state  [view ↗] [edit]…".
+    Rename, delete and reset-to-default live in the editor's bar."""
     ed = cfg["editor"]["enabled"]
     tabs, about, hidden = list_tabs(cfg), cfg["page"]["about_tab"], set(cfg["tabs"]["hidden"])
 
@@ -888,34 +904,49 @@ def files_markdown(cfg, which="all"):
         return (t(cfg, "st_tab") if name in tabs else t(cfg, "st_right") if name == about
                 else t(cfg, "st_hidden") if name in hidden else "")
 
-    def edit_links(paths):
-        return " · ".join(f"[{p.name}](/edit/{quote(file_id(p))})" if ed else f"`{p.name}`" for p in paths)
+    def btn(href, label, title=""):
+        tt = f' title="{html.escape(title)}"' if title else ""
+        return f'<a class="tab" href="{href}"{tt}>{html.escape(label)}</a>'
 
-    lines = [""]
+    def edit_btns(paths):
+        if not ed:
+            return []
+        out = []
+        for p in paths:
+            m = LANG_SUFFIX_RE.match(p.stem) if p.parent == PAGES else None
+            label = t(cfg, "f_edit_lang", lang=m.group(2)) if m else t(cfg, "f_edit")
+            out.append(btn(f"/edit/{quote(file_id(p))}", label, file_id(p)))
+        return out
+
+    def row(name, notes, btns):
+        note = " · ".join(html.escape(n) for n in notes if n)
+        note = f" <small>{note}</small>" if note else ""
+        return (f'<div class="file-row"><span class="file-name">{html.escape(name)}{note}</span>'
+                f'<span class="file-btns">{"".join(btns)}</span></div>')
+
+    def label_note(name):
+        lab = tab_label(cfg, name)
+        return lab if lab != name else ""
+
+    rows = []
     if which in ("all", "user"):
         for name in all_stems():
             if is_system(cfg, name):
                 continue
-            dele = (f' <button class="del" data-file="{name}.md" title="{html.escape(t(cfg, "delete_file", name=name))}">✕</button>'
-                    if ed else "")
-            lines.append(f"- {edit_links(page_variants(name))} · [{html.escape(tab_label(cfg, name))} ↗](/{name}) "
-                         f"<small>{state(name)}</small>{dele}")
+            rows.append(row(name, [label_note(name), state(name)],
+                            [btn(f"/{quote(name)}", t(cfg, "f_view"))] + edit_btns(page_variants(name))))
     if which in ("all", "system"):
         for name in sorted(SYSTEM_PAGES):
             p = page_path(cfg, name)
             if p:
-                custom = p.parent.parent == SYSTEM
-                note = (" · " if state(name) else "") + t(cfg, "st_custom") if custom else ""
-                reset = (f' <button class="del" data-file="{file_id(p)}" data-reset="1" '
-                         f'title="{html.escape(t(cfg, "reset_default"))}">↺</button>' if custom and ed else "")
-                lines.append(f"- {edit_links([p])} · [{html.escape(tab_label(cfg, name))} ↗](/{name}) "
-                             f"<small>{state(name)}{note}</small>{reset}")
-        cfg_link = "[config.toml](/edit/config.toml)" if ed else "`config.toml`"
-        lines.append(f"- {cfg_link} <small>{t(cfg, 'st_config')}</small>")
-    if len(lines) == 1:
-        lines.append(f"<small>{t(cfg, 'no_files')}</small>")
-    lines.append("")
-    return lines
+                custom = t(cfg, "st_custom") if p.parent.parent == SYSTEM else ""
+                rows.append(row(name, [label_note(name), state(name), custom],
+                                [btn(f"/{quote(name)}", t(cfg, "f_view"))] + edit_btns([p])))
+        rows.append(row("config.toml", [t(cfg, "st_config")],
+                        [btn("/edit/config.toml", t(cfg, "f_edit"))] if ed else []))
+    if not rows:
+        return ["", f"<small>{t(cfg, 'no_files')}</small>", ""]
+    return ["", f'<div class="files">{"".join(rows)}</div>', ""]
 
 
 def newfile_html(cfg):
@@ -1353,18 +1384,6 @@ window.h6082 = (() => {
     const n = f.querySelector('input').value.trim().replace(/\\.md$/, '');
     const r = await api('/api/new', {method: 'POST', body: JSON.stringify({name: n})});
     if (r.ok) location.href = '/edit/' + encodeURIComponent(n) + '.md'; else alert(r.j.error || r.status);
-  });
-
-  document.addEventListener('click', async (e) => {
-    const b = e.target.closest('button.del');
-    if (!b) return;
-    e.preventDefault();
-    const f = b.dataset.file;
-    const ask = b.dataset.reset ? T.confirm_reset : T.confirm_delete_file;
-    if (!confirm(ask.replace('{f}', f))) return;
-    const r = await api('/api/file?name=' + encodeURIComponent(f), {method: 'DELETE'});
-    if (!r.ok) alert(r.j.error || r.status);
-    else if (!window.EventSource || !document.querySelector('.live')) location.reload();
   });
 
   async function checks() {
@@ -1909,12 +1928,12 @@ EDITOR_JS = """<script nonce="__NONCE__">
 __SMART__
 (() => {
   const T = __T__;
-  const NAME = __NAME__, DELAY = __DELAY__;
+  const NAME = __NAME__, DELAY = __DELAY__, BACK = __BACK__;
   const ta = document.getElementById('src'), st = document.getElementById('status');
   const cf = document.getElementById('conflict');
   const H = {'X-H6082': '1'};
   const url = '/api/file?name=' + encodeURIComponent(NAME);
-  let mtime = null, timer = null, saving = false, again = false, blocked = false, saved = null;
+  let mtime = null, timer = null, saving = false, again = false, blocked = false, saved = null, gone = false;
   const set = (t, c) => { st.textContent = t; st.className = 'st ' + (c || ''); };
   const dirty = () => saved !== null && ta.value !== saved;
 
@@ -1931,7 +1950,7 @@ __SMART__
 
   async function save(force) {
     clearTimeout(timer);
-    if (blocked && !force) return;
+    if (gone || (blocked && !force)) return;
     if (saving) { again = true; return; }
     if (!dirty() && !force) return;
     saving = true; again = false;
@@ -1963,7 +1982,48 @@ __SMART__
   editorPanes();
   document.getElementById('reload').onclick = () => { if (!dirty() || confirm(T.confirm_discard)) load(); };
   document.getElementById('force').onclick = () => { if (confirm(T.confirm_overwrite)) save(true); };
-  window.addEventListener('beforeunload', (e) => { if (dirty()) { save(); e.preventDefault(); e.returnValue = ''; } });
+  // rename / delete / reset to default (buttons next to the file name)
+  async function flush() {  // pending edits are saved first; false = could not save
+    clearTimeout(timer);
+    for (let i = 0; i < 100 && saving; i++) await new Promise((r) => setTimeout(r, 50));
+    if (dirty()) await save();
+    return !blocked && !dirty();
+  }
+  const post = async (method, u, body) => {
+    const r = await fetch(u, {method, headers: {...H, 'Content-Type': 'application/json'}, body});
+    return {ok: r.ok, status: r.status, j: await r.json().catch(() => ({}))};
+  };
+  const ren = document.getElementById('ren'), del = document.getElementById('del'), rst = document.getElementById('reset');
+  if (ren) ren.onclick = async () => {
+    const cur = NAME.replace(/\\.md$/, '');
+    const to = (prompt(T.rename_prompt, cur) || '').trim().replace(/\\.md$/, '');
+    if (!to || to === cur) return;
+    if (!await flush()) { set(T.rename_unsaved, 'err'); return; }
+    const r = await post('POST', '/api/rename', JSON.stringify({name: NAME, to}));
+    if (!r.ok) { alert(r.j.error || r.status); return; }
+    if (r.j.warning) alert(r.j.warning);
+    gone = true;
+    location.href = '/edit/' + encodeURIComponent(r.j.name);
+  };
+  if (del) del.onclick = async () => {
+    if (!confirm(T.confirm_delete_file.replace('{f}', NAME))) return;
+    clearTimeout(timer);
+    gone = true;
+    const r = await post('DELETE', url);
+    if (!r.ok) { gone = false; alert(r.j.error || r.status); return; }
+    location.href = BACK;
+  };
+  if (rst) rst.onclick = async () => {
+    if (!confirm(T.confirm_reset.replace('{f}', NAME))) return;
+    clearTimeout(timer);
+    gone = true;
+    const r = await post('DELETE', url);
+    gone = false;
+    if (!r.ok) { alert(r.j.error || r.status); return; }
+    rst.remove();
+    await load();
+  };
+  window.addEventListener('beforeunload', (e) => { if (!gone && dirty()) { save(); e.preventDefault(); e.returnValue = ''; } });
   load();
 })();
 </script>"""
@@ -2165,6 +2225,14 @@ def build_editor(cfg, tabs, fname):
     plang = m.group(1) if SYSTEM_FILE_RE.match(fname) else (m.group(2) if m else "en")
     preview = stem or default_tab(cfg, tabs)
     about = cfg["page"]["about_tab"] or ""
+    p = editable_path(fname)
+    acts = ""
+    if p is not None and p.parent == PAGES:
+        acts = (f'<button id="ren" type="button" class="tab">{t(cfg, "ed_rename")}</button>'
+                f'<button id="del" type="button" class="tab danger">{t(cfg, "ed_delete")}</button>')
+    elif fname.startswith("system/") and p.is_file() and default_of(p):
+        acts = f'<button id="reset" type="button" class="tab danger">{t(cfg, "ed_reset")}</button>'
+    acts = f'<span class="ed-acts">{acts}</span>' if acts else ""
     view = (f'<button id="pv" class="tab" type="button" aria-pressed="true" title="{t(cfg, "ed_preview_title")}">'
             f'{t(cfg, "ed_preview")}</button>' if preview else "")
     if stem:
@@ -2180,7 +2248,7 @@ def build_editor(cfg, tabs, fname):
     body = f"""{tab_bar(cfg, tabs, None, live=False)}
 <div class="editor">
   <div class="ed-head">
-    <span class="ed-name">✎ {html.escape(fname)}</span>
+    <span class="ed-name">✎ {html.escape(fname)}</span>{acts}
     <span id="status" class="st">{t(cfg, "loading")}</span>
     <span id="conflict" hidden><button id="reload">{t(cfg, "ed_reload")}</button><button id="force">{t(cfg, "ed_force")}</button></span>
     <span class="ed-right">{view}<a class="tab" href="/{quote(about)}">{t(cfg, "ed_back")}</a></span>
@@ -2190,7 +2258,7 @@ def build_editor(cfg, tabs, fname):
     {iframe}
   </div>
 </div>"""
-    js = EDITOR_JS.replace("__SMART__", SMART_JS).replace("__NAME__", json.dumps(fname)).replace("__DELAY__", str(int(cfg["editor"]["autosave_ms"])))
+    js = EDITOR_JS.replace("__SMART__", SMART_JS).replace("__NAME__", json.dumps(fname)).replace("__BACK__", json.dumps("/" + quote(about))).replace("__DELAY__", str(int(cfg["editor"]["autosave_ms"])))
     return page(cfg, f"✎ {fname} · {cfg['page']['title']}", body, js, "editing")
 
 
@@ -2474,6 +2542,56 @@ def set_toml_value(text, section, key, literal):
         return text.rstrip("\n") + f"\n\n[{section}]\n{key} = {literal}\n"
     lines.insert(start + 1, f"{key} = {literal}")
     return "\n".join(lines)
+
+
+def rename_in_config(text, old, new):
+    """Config text with tab `old` renamed to `new` in [page] about_tab and [tabs] order / hidden /
+    labels. Returns the new text, or None when the result does not parse to exactly that change
+    (then the caller warns instead of writing)."""
+    try:
+        before = tomllib.loads(text)
+    except tomllib.TOMLDecodeError:
+        return None
+    page, tabs = before.get("page", {}), before.get("tabs", {})
+    labels = tabs.get("labels", {}) if isinstance(tabs.get("labels"), dict) else {}
+    uses = (page.get("about_tab") == old or old in labels
+            or any(isinstance(tabs.get(k), list) and old in tabs[k] for k in ("order", "hidden")))
+    if not uses:
+        return text
+    want = json.loads(json.dumps(before, default=str))
+    if want.get("page", {}).get("about_tab") == old:
+        want["page"]["about_tab"] = new
+    for k in ("order", "hidden"):
+        if isinstance(want.get("tabs", {}).get(k), list):
+            want["tabs"][k] = [new if x == old else x for x in want["tabs"][k]]
+    if old in labels:
+        want["tabs"]["labels"] = {(new if k == old else k): v for k, v in want["tabs"]["labels"].items()}
+
+    quoted = re.compile(r"""(["'])""" + re.escape(old) + r"\1")
+    key_re = re.compile(r"""(^\s*|[{,]\s*)(["']?)""" + re.escape(old) + r"\2(\s*=)")  # labels: keys only
+    out, sec, key = [], None, None
+    for line in text.split("\n"):
+        h = re.match(r"^\s*\[([^\[\]]+)\]\s*(?:#.*)?$", line)
+        if h:
+            sec, key = h.group(1).strip(), None
+        elif k := re.match(r"^\s*([A-Za-z0-9_-]+)\s*=", line):
+            key = k.group(1)
+        if not h and ((sec == "page" and key == "about_tab")
+                      or (sec == "tabs" and key in ("order", "hidden", "labels")) or sec == "tabs.labels"):
+            code, _, comment = line.partition("#")
+            if sec == "tabs.labels" or key == "labels":
+                q = '' if re.fullmatch(r"[A-Za-z0-9_-]+", new) else '"'   # "a.b" would be a dotted key
+                code = key_re.sub(lambda m: m.group(1) + (m.group(2) or q) + new + (m.group(2) or q) + m.group(3), code)
+            else:
+                code = quoted.sub(f'"{new}"', code)
+            line = code + ("#" + comment if _ else "")
+        out.append(line)
+    res = "\n".join(out)
+    try:
+        got = json.loads(json.dumps(tomllib.loads(res), default=str))
+    except tomllib.TOMLDecodeError:
+        return None
+    return res if got == want else None
 
 
 def toml_warning(cfg, text):
@@ -3253,6 +3371,72 @@ class Handler(BaseHTTPRequestHandler):
         targets = [t for t in targets if isinstance(t, str) and t in CHECK_TARGETS][:100]
         self._json(200, run_checks(targets, cfg))
 
+    # ---- POST /api/rename  {name: "demo.md", to: "start"}  (a tab with its translations, history
+    # and references in config.toml; a translation file only by itself)
+    def _api_rename(self):
+        cfg = load_config()
+        if err := self._api_denied(cfg):
+            return self._json(403, {"error": err})
+        if not self._auth_ok():
+            return
+        try:
+            data = self._read_json(cfg)
+            fname, to = str(data.get("name", "")), str(data.get("to", "")).strip()
+        except ValueError as e:
+            return self._json(400, {"error": str(e)})
+        p = editable_path(fname)
+        if p is None or p.parent != PAGES or not p.is_file():
+            return self._json(404, {"error": t(cfg, "err_file_missing")})
+        if to.endswith(".md"):
+            to = to[:-3]
+        tm = LANG_SUFFIX_RE.match(to)
+        base = tm.group(1) if tm else to
+        if not TAB_RE.match(to) or base in RESERVED or is_system(cfg, base):
+            return self._json(400, {"error": t(cfg, "err_bad_name")})
+        sm = LANG_SUFFIX_RE.match(p.stem)
+        if sm:                       # a translation: just this file
+            pairs = [(p, PAGES / f"{to}.md")]
+        else:                        # a tab: the base file and its translations
+            if tm:
+                return self._json(400, {"error": t(cfg, "err_rename_target", lang=tm.group(2))})
+            pairs = [(f, PAGES / (f.name.replace(p.stem, to, 1))) for f in page_variants(p.stem)]
+        if all(a == b for a, b in pairs):
+            return self._json(200, {"name": fname})
+        warning = None
+        with _lock:
+            for a, b in pairs:
+                if b.exists():
+                    return self._json(409, {"error": t(cfg, "err_exists", name=b.stem)})
+            done = []
+            try:
+                for a, b in pairs:
+                    os.replace(a, b)
+                    done.append((a, b))
+            except OSError as e:
+                for a, b in reversed(done):
+                    os.replace(b, a)
+                return self._json(500, {"error": t(cfg, "err_write_failed", e=e.strerror)})
+            with HIST_LOCK:
+                for a, b in pairs:
+                    ha, hb = HIST / a.name, HIST / b.name
+                    if ha.is_dir() and not hb.exists():
+                        try:
+                            os.replace(ha, hb)
+                        except OSError as e:
+                            log.warning("history of %s not moved: %s", a.name, e)
+            if not sm and CFG_FILE.is_file():
+                text = CFG_FILE.read_text(encoding="utf-8")
+                new = rename_in_config(text, p.stem, to)
+                if new is None:
+                    warning = t(cfg, "warn_rename_config", old=p.stem)
+                elif new != text:
+                    try:
+                        write_atomic(CFG_FILE, new)
+                    except OSError:
+                        warning = t(cfg, "warn_rename_config", old=p.stem)
+        log.info("renamed %s", ", ".join(f"{a.name} -> {b.name}" for a, b in pairs))
+        self._json(200, {"name": pairs[0][1].name, "warning": warning})
+
     # ---- POST /api/new  (new file)
     def do_POST(self):
         if not self._host_ok():
@@ -3270,6 +3454,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._api_tasks()
         if path in ("/api/history/restore", "/api/history/purge"):
             return self._api_history_write(path.rsplit("/", 1)[1])
+        if path == "/api/rename":
+            return self._api_rename()
         if path != "/api/new":
             return self._json(404, {"error": t(load_config(), "err_unknown_endpoint")})
         cfg = load_config()

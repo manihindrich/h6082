@@ -113,6 +113,9 @@ Chyba syntaxe v TOML: zůstane poslední platný config a varování jde do logu
 `/api/new`
 : vytvoření nového `.md` (POST)
 
+`/api/rename`
+: přejmenování záložky i s překlady a historií (POST `{name, to}`); odkazy v `[tabs] order`, `hidden`, `labels` a `[page] about_tab` se v `config.toml` upraví samy. Překlad se přejmenuje sám.
+
 `/api/check`
 : stav služeb (POST, seznam cílů)
 
@@ -158,14 +161,14 @@ Chyba syntaxe v TOML: zůstane poslední platný config a varování jde do logu
 `/healthz`
 : healthcheck (`ok`)
 
-Pokud je nastavené heslo, vyžadují přihlášení `/edit/…`, `/api/file` a `/api/new`. Na jiný `Host` než z `[api] allowed_hosts` server odpoví chybou 421.
+Pokud je nastavené heslo, vyžadují přihlášení `/edit/…`, `/api/file`, `/api/new` a `/api/rename`. Na jiný `Host` než z `[api] allowed_hosts` server odpoví chybou 421.
 
 Jméno záložky smí obsahovat jen `A-Z a-z 0-9 _ . -`. Soubor s jiným jménem se ignoruje. Názvy `static`, `events`, `healthz`, `edit`, `api`, `history` a `media` jsou rezervované, stejně jako jména vestavěných stránek `h6082`, `showcase` a `docs`.
 
 ## Bezpečnost
 Přehled je v bloku Bezpečnost na stránce [h6082](/h6082). Technické detaily:
 
-- **Heslo editoru** (`H6082_EDITOR_PASSWORD` v `.env`): HTTP Basic pro `/edit/…`, `/api/file` a `/api/new`. Porovnává se v konstantním čase a po chybném pokusu server odpovídá se zpožděním 1 s.
+- **Heslo editoru** (`H6082_EDITOR_PASSWORD` v `.env`): HTTP Basic pro `/edit/…` a všechna API, která zapisují. Porovnává se v konstantním čase a po chybném pokusu server odpovídá se zpožděním 1 s.
 - **CSP**: spustí se jen skripty aplikace (nonce náhodný pro každou odpověď). `<script>`, `onclick=` ani `javascript:` z md se nespustí.
 - **Rámce**: `frame-ancestors 'self'` a `X-Frame-Options: SAMEORIGIN` chrání proti clickjackingu.
 - **Hlavičky**: `nosniff`, `Referrer-Policy: same-origin`, `Cross-Origin-Resource-Policy` a `Cross-Origin-Opener-Policy: same-origin`.
@@ -285,6 +288,7 @@ Ukládá se samo po chvíli bez psaní, ++ctrl+s++ uloží hned. Vpravo je živ�
 
 - **hranice editor | náhled**: táhni myší; dvojklik ji vrátí doprostřed, na zaměřené hranici fungují ++arrow-left++ ++arrow-right++. Šířka se pamatuje v prohlížeči.
 - **náhled** (tlačítko vedle *zobrazit*) nebo ++alt+p++: skryje / ukáže náhled
+- **přejmenovat / smazat** vedle názvu souboru: přejmenování vezme i překlady, historii a odkazy v `config.toml`; smazání přesune soubor do `content/.trash/`. U upravené systémové stránky je tu *vrátit výchozí*.
 - **párování**: `` ( [ { < " ' ` `` se zavírají samy, napsání zavírací závorky ji jen přeskočí, ++backspace++ smaže prázdný pár
 - **seznamy a citace**: ++enter++ pokračuje v `-`, `1.`, `- [ ]` a `>`; ++enter++ na prázdné položce seznam ukončí. ```` ```jazyk ```` + ++enter++ uzavře blok kódu.
 - **odsazení**: ++tab++ / ++shift+tab++ odsadí položku seznamu nebo všechny vybrané řádky

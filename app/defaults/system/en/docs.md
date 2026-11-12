@@ -113,6 +113,9 @@ A TOML syntax error keeps the last valid config and logs a warning. Unknown keys
 `/api/new`
 : create a new `.md` (POST)
 
+`/api/rename`
+: rename a tab with its translations and history (POST `{name, to}`); references in `[tabs] order`, `hidden`, `labels` and `[page] about_tab` in `config.toml` are updated too. A translation is renamed on its own.
+
 `/api/check`
 : service status (POST, list of targets)
 
@@ -158,14 +161,14 @@ A TOML syntax error keeps the last valid config and logs a warning. Unknown keys
 `/healthz`
 : healthcheck (`ok`)
 
-If a password is set, `/edit/…`, `/api/file` and `/api/new` require a login. For a `Host` that is not in `[api] allowed_hosts` the server answers with error 421.
+If a password is set, `/edit/…`, `/api/file`, `/api/new` and `/api/rename` require a login. For a `Host` that is not in `[api] allowed_hosts` the server answers with error 421.
 
 A tab name may only contain `A-Z a-z 0-9 _ . -`. Files with other names are ignored. The names `static`, `events`, `healthz`, `edit`, `api`, `history` and `media` are reserved, and so are the names of the built-in pages `h6082`, `showcase` and `docs`.
 
 ## Security
 An overview is in the Security block on the [h6082](/h6082) page. Technical details:
 
-- **Editor password** (`H6082_EDITOR_PASSWORD` in `.env`): HTTP Basic for `/edit/…`, `/api/file` and `/api/new`. Compared in constant time; after a wrong attempt the server answers with a 1 s delay.
+- **Editor password** (`H6082_EDITOR_PASSWORD` in `.env`): HTTP Basic for `/edit/…` and every write API. Compared in constant time; after a wrong attempt the server answers with a 1 s delay.
 - **CSP**: only the application's scripts run (a random nonce per response). `<script>`, `onclick=` and `javascript:` from md never run.
 - **Frames**: `frame-ancestors 'self'` and `X-Frame-Options: SAMEORIGIN` protect against clickjacking.
 - **Headers**: `nosniff`, `Referrer-Policy: same-origin`, `Cross-Origin-Resource-Policy` and `Cross-Origin-Opener-Policy: same-origin`.
@@ -285,6 +288,7 @@ Saves by itself after a short pause in typing, ++ctrl+s++ saves at once. Live pr
 
 - **editor | preview divider**: drag it; a double-click puts it back in the middle, ++arrow-left++ ++arrow-right++ work on the focused divider. The width is remembered in the browser.
 - **preview** (the button next to *view*) or ++alt+p++: hides / shows the preview
+- **rename / delete** next to the file name: renaming takes the translations, the history and references in `config.toml` along; deleting moves the file to `content/.trash/`. A customised system page has *reset to default* here.
 - **pairing**: `` ( [ { < " ' ` `` close themselves, typing the closer just steps over it, ++backspace++ deletes an empty pair
 - **lists and quotes**: ++enter++ continues `-`, `1.`, `- [ ]` and `>`; ++enter++ on an empty item ends the list. ```` ```lang ```` + ++enter++ closes the code block.
 - **indent**: ++tab++ / ++shift+tab++ indents a list item or all selected lines

@@ -247,6 +247,8 @@ body.editing main { max-width: none; height: 100vh; display: flex; flex-directio
 .ed-split:focus { outline: none; }
 .ed-panes.dragging { cursor: col-resize; user-select: none; }
 .ed-panes.dragging iframe { pointer-events: none; }
+.ed-acts { display: flex; gap: 4px; }
+button.tab.danger:hover { color: var(--callout-danger); border-color: var(--callout-danger); }
 button.tab { padding: 1px 10px; color: var(--muted); }
 button.tab:hover { color: var(--text); }
 button.tab[aria-pressed="true"] { color: var(--text); background: color-mix(in srgb, var(--accent) 16%, var(--bg)); border-color: var(--accent); }
@@ -293,16 +295,14 @@ a[data-check][data-state="down"]::before { color: var(--callout-danger); }
 .rss-list a.rss-c:hover { color: var(--link-hover); text-decoration: none; }
 .rss-err { color: var(--callout-danger); }
 
-/* ---- deleting files ---------------------------------------------------- */
-button.del {
-  padding: 0 5px;
-  margin-left: 4px;
-  font-size: .8em;
-  line-height: 1.3;
-  color: var(--muted);
-  background: transparent;
-}
-button.del:hover { color: var(--callout-danger); border-color: var(--callout-danger); }
+/* ---- file list ({{files}}): name, then view / edit buttons ------------- */
+.files { display: flex; flex-direction: column; margin: 4px 0; }
+.file-row { display: flex; align-items: center; gap: 8px; padding: 2px 0; border-bottom: 1px dashed color-mix(in srgb, var(--border) 60%, transparent); }
+.file-row:last-child { border-bottom: 0; }
+.file-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.file-name small { color: var(--muted); margin-left: 4px; }
+.file-btns { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+.file-btns .tab { padding: 0 8px; font-size: .85em; }
 
 /* ---- theme picker ({{theme}}) ------------------------------------------ */
 .themes-pick { display: flex; flex-direction: column; gap: 6px; margin: 4px 0; }
