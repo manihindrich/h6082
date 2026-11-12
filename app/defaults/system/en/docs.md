@@ -1,5 +1,100 @@
-# Operation
+#__ Documentation
+## 📘 Documentation
+Configuration, operation and security of h6082. Set in `config.toml` (**configuration** in the [Documentation and configuration](/h6082) block) and in `.env`. Markdown and its elements are shown on the [markdown showcase](/markdown).
+/
 
+[Getting started](#features) · [How it works](#how-it-works) · [Operation](#updates) · [Security](#protection) · [Editor](#editor) · [Configuration](#config-format) · [Look](#cfg-layout) · [Endpoints](#pages-and-files)
+{: .center .big }
+
+#__ Getting started
+## `Getting started`
+
+#
+## Features
+### Content
+- tabs as md files, columns of different widths and blocks
+- full markdown: tables, callouts, tasks, code with copying
+- own images from the `content/media/` folder
+- web editor with highlighting, shortcuts and autosave
+- `##*` blocks, notes and tasks editable right on the page
+- version history with diff and restore
+### Live elements
+- instant refresh after a save
+- service status (HTTP, TCP) right next to links
+- RSS and server stats as blocks
+### Look
+- 12 themes and an auto mode following the OS
+- UI and documentation in English and Czech
+- layout, font, colours and typography in `config.toml`
+
+#
+## Installation
+```bash
+cp .env.example .env
+# in .env: UID and GID (id), editor password
+docker compose up -d --build
+```
+
+Local settings live in `.env`:
+```bash
+H6082_UID=1000          # id -u
+H6082_GID=1000          # id -g
+H6082_BIND=127.0.0.1    # this machine only
+H6082_PORT=8088
+H6082_EDITOR_USER=h6082
+H6082_EDITOR_PASSWORD=… # openssl rand -base64 24
+H6082_ALLOWED_HOSTS=    # extra hostnames, e.g. a domain behind a reverse proxy
+H6082_READONLY=         # 1 = public read-only page (see Read-only mode)
+H6082_DISK_ROOT=/var/empty
+```
+After changing `.env` run `docker compose up -d`. Exposing the page to a network is covered by the Security block.
+
+`extra_hosts: host.docker.internal:host-gateway` lets you check services running directly on the host. The service must however listen on the docker bridge too, not only on `127.0.0.1`.
+
+#
+## Running and maintenance
+```bash
+# build + start
+docker compose up -d --build
+# log
+docker compose logs -f h6082
+# restart / stop
+docker compose restart h6082
+docker compose down
+# update the application
+git pull && docker compose up -d --build
+# backup (data + settings)
+tar czf h6082.tgz content/ .env
+# uninstall and clean up old layers
+docker compose down --rmi local
+docker image prune -f
+```
+The container has `restart: unless-stopped`, so it starts again after a Docker restart.
+Content and config take effect right after a save, without a restart. What an update changes and what it does not is described in the Updates block.
+
+#__ How it works
+## `How it works`
+
+#
+## How it works
+1. the server loads `pages/<tab>.md` (or a translation for the language)
+2. splits the text into columns and blocks
+3. renders the markdown and caches the result
+4. when a file changes, notifies open pages (SSE)
+
+## Live changes
+An open page refreshes itself after a save, typically within 0.5 s (`live_reload`). The server watches the modification time of files in `content/` and notifies the browser via SSE (`/events`). The browser swaps the content without flicker and keeps the scroll position.
+
+Green dot at the top right = the connection is active. It reconnects by itself after a container restart. Behind a reverse proxy, buffering must be disabled for `/events`.
+
+Without live reload, the modification time is checked on every request:
+- `pages/*.md` and `system/*/*.md` → the tab is re-rendered (a new image re-renders everything)
+- `config.toml` → all tabs are re-rendered
+- a new or deleted `.md` → the tab bar changes
+
+A TOML syntax error keeps the last valid config and logs a warning. Unknown keys are ignored and logged too.
+
+#
 ## Files
 ```text
 docker-compose.yml
@@ -19,7 +114,7 @@ content/             your data only — an update never touches it
 - `docker-compose.yml`: the container and its hardening
 - `.env`: local settings and the editor password, template `.env.example`. It is in `.gitignore`.
 - `config.toml`: configuration (this tab)
-- `app/defaults/`: what comes with the application — built-in pages h6082, markdown and config in each language, the demo tab, its images and the default `config.toml`
+- `app/defaults/`: what comes with the application — the built-in pages h6082, markdown and documentation in each language, the demo tabs, their images and the default `config.toml`
 - `pages/*.md`: your tabs, optionally with translations `name.cs.md` and `name.en.md` (see Languages)
 - `system/<lang>/`: your own copies of built-in pages, created by saving them in the editor
 - `server.py`: generator, HTTP server, API (editor, checks, RSS)
@@ -30,144 +125,96 @@ content/             your data only — an update never touches it
 
 The `content/` folder is mounted writable into the container so the web editor can save into it. The container runs as the UID:GID from `.env`, so the files stay yours. Changes in `app/` need a rebuild.
 
-## Running
-```bash
-# build + start
-docker compose up -d --build
-# log
-docker compose logs -f h6082
-# restart / stop
-docker compose restart h6082
-docker compose down
-```
-The container has `restart: unless-stopped`, so it starts again after a Docker restart.
+#
+## Dependencies
+| component | version |
+|---|---|
+| Docker + Compose | v2 |
+| Python (alpine) | 3.12 |
+| Markdown | 3.7 |
+| pymdown-extensions | 10.12 |
+| Pygments | 2.18.0 |
+| defusedxml | 0.7.1 |
+| JetBrains Mono | 2.304 |
 
-## Port and .env
-Local settings live in `.env`:
-```bash
-H6082_UID=1000          # id -u
-H6082_GID=1000          # id -g
-H6082_BIND=127.0.0.1    # this machine only
-H6082_PORT=8088
-H6082_EDITOR_USER=h6082
-H6082_EDITOR_PASSWORD=… # openssl rand -base64 24
-H6082_ALLOWED_HOSTS=    # extra hostnames, e.g. a domain behind a reverse proxy
-H6082_READONLY=         # 1 = public read-only page (see Read-only mode)
-H6082_DISK_ROOT=/var/empty
-```
-After changing `.env` run `docker compose up -d`. Exposing the page to a network is covered by the Security block on the [h6082](/h6082) page.
+The build needs internet access (PyPI, GitHub). At runtime only service checks and RSS go out, and only to addresses written in md files.
 
-`extra_hosts: host.docker.internal:host-gateway` lets you check services running directly on the host. The service must however listen on the docker bridge too, not only on `127.0.0.1`.
+#__ Operation
+## `Operation`
 
+#
 ## Updates
-An update replaces only the application (the image). **Your data in `content/` and `.env` are never touched**:
+An update replaces only the application (the image). **Your data in `content/` and `.env` stay unchanged**:
 
 | part | after an update |
 |---|---|
 | your tabs, notes, tasks | unchanged |
 | `content/config.toml` | unchanged; new options use their defaults until you set them |
-| built-in pages (h6082, markdown, config) | new version from the image |
-| your customised built-in page | yours stays; ↺ on the h6082 page returns the new default |
-| demo tab | copied only on the very first start (marker `content/.seeded`), never again |
+| built-in pages (h6082, markdown, documentation) | new version from the image |
+| your customised built-in page | stays yours; *reset to default* in the editor returns the new default |
+| demo tabs | copied only on the very first start (marker `content/.seeded`), never again |
 
-First start with an empty `content/`: the default `config.toml` and the demo tab are copied there. A deleted demo therefore never comes back.
+First start with an empty `content/`: the default `config.toml` and the demo tabs are copied there. Deleted demos therefore never come back.
 
 A deployment adds its domain with the `H6082_ALLOWED_HOSTS` environment variable (comma separated) instead of editing `[api] allowed_hosts` in your config.
 
-Update: `git pull && docker compose up -d --build`. On a server this is done by the deploy workflow (repository `h6082-deploy`).
+On a server, updates are done by the deploy workflow (repository `h6082-deploy`).
 
-## Live changes
-An open page refreshes itself after a save, typically within 0.5 s (`live_reload`). The server watches the modification time of files in `content/` and notifies the browser via SSE (`/events`). The browser swaps the content without flicker and keeps the scroll position.
+#
+## Read-only mode
+`H6082_READONLY=1` turns the application into a public, read-only page, e.g. a demo on the internet:
 
-Green dot at the top right = the connection is active. It reconnects by itself after a container restart. Behind a reverse proxy, buffering must be disabled for `/events`.
+- nothing can be saved: the editor, new files, deleting, notes, tasks, theme, language and history return `403`, and their controls are hidden
+- content comes only from the image (`app/defaults/`): no volume, nothing to fill or overwrite
+- live reload (`/events`), server stats (`/api/sys`) and the change history are off
+- a visitor's theme and language are kept only in their own browser (cookie); the server stores nothing
+- service status and RSS keep working, only for targets written in the image's md files
 
-Without live reload, the modification time is checked on every request:
-- `pages/*.md` and `system/*/*.md` → the tab is re-rendered (a new image re-renders everything)
-- `config.toml` → all tabs are re-rendered
-- a new or deleted `.md` → the tab bar changes
+Run it with a read-only file system and no volume (see `h6082-deploy-demo`). Even a bug in the application then has nowhere to write, and a restart is always clean.
 
-A TOML syntax error keeps the last valid config and logs a warning. Unknown keys are ignored and logged too.
+#
+## Demo mode
+The `{{sys}}` and `{{history}}` blocks have a `demo` switch. With it they show **made-up data**, generated right in the browser without asking the server. Handy for examples, documentation and public pages.
 
-## Endpoints
-`/`
-: the first tab
+| block | demo | real data |
+|---|---|---|
+| server | `{{sys demo}}` | `{{sys}}` + `[system] enabled = true` |
+| history | `{{history 5 demo}}` | `{{history 5}}` |
 
-`/<name>`
-: tab `pages/<name>.md` (or its translation, see Languages)
+The demo tabs and the markdown showcase use demo mode, so they reveal neither server data nor the names of your files.
 
-`/<name>?lang=cs`
-: preview of a tab in another language, nothing is saved
+#__ Security
+## `Security`
 
-`/<name>?embed=1`
-: tab without the top bar (editor preview)
+#
+## 🛡️ Protection
+- listens only on `127.0.0.1`
+- the editor and every write (notes, tasks, theme, language) are protected by a password (`H6082_EDITOR_PASSWORD` in `.env`)
+- runs only its own scripts (CSP). `<script>` and `javascript:` in md do not work.
+- foreign websites cannot embed the page in a frame, read it via DNS rebinding or call the API
+- the container has a read-only file system, no extra privileges and memory and process limits
+- checks and RSS go only to addresses from md
+- writes are atomic, deleting is just a move to the trash
+- images are served with CSP `sandbox`, so a script in an SVG does not run
+- fonts are verified via SHA-256 at build time
 
-`/edit/<file>`
-: web editor (`<name>.md`, `<name>.cs.md`, `system/<lang>/<name>.md` or `config.toml`)
+## 🚫 Intentionally left out
+Host processes, docker containers and network. They would require weakening the container isolation.
 
-`/api/file?name=…`
-: read (GET) and save (PUT) a file for the editor
+#
+## ⚠️ Recommendations
+- **anyone who can see the page can see the md content.** Passwords, tokens and private addresses do not belong there!
+- `.env` contains the password and does not belong in the repository (it is in `.gitignore`)
+- expose the page to a network only through a reverse proxy with HTTPS, and add the server name to `[api] allowed_hosts`
+- write e-mail addresses as `{{email user domain}}`, then bots cannot read them
+- **hidden tabs are not private.** They are reachable via `/<name>` and their list is visible on the h6082 page.
+- **the password protects only writes; anyone who can reach the page can read it.** On a public server, put the whole site behind a login in the reverse proxy.
+- server stats (`/api/sys`) are off (`[system] enabled`). The examples use `{{sys demo}}` with made-up data. Turn it on only where server details do not matter.
+- in examples use `{{history demo}}`; the real history shows file names and edit times
+- the history keeps deleted text too. If you accidentally put a secret into a file, also delete the file's history via **history** in the editor.
 
-`/api/file?name=…` DELETE
-: delete a user tab with its translations (for a translation only that file), i.e. move it to `content/.trash/<name>.<time>.md`
-
-`/api/new`
-: create a new `.md` (POST)
-
-`/api/rename`
-: rename a tab with its translations and history (POST `{name, to}`); references in `[tabs] order`, `hidden`, `labels` and `[page] about_tab` in `config.toml` are updated too. A translation is renamed on its own.
-
-`/api/check`
-: service status (POST, list of targets)
-
-`/api/rss?url=…&limit=…`
-: feed items (GET)
-
-`/themes.css`
-: CSS of all themes (generated from the config)
-
-`/api/sys`
-: server stats for `{{sys}}` (GET)
-
-`/media/<file>`
-: own images from `content/media/` (svg, png, jpg, webp, gif, avif, ico) with CSP `sandbox`
-
-`/static/…`
-: CSS, font, images
-
-`/events`
-: SSE stream for live reload
-
-`/history/<file>`
-: list of versions, diff and restore (with the editor password)
-
-`/api/theme`
-: save the theme to `[theme] default` (POST, with the editor password)
-
-`/api/lang`
-: save the language to `[page] lang` (POST, with the editor password)
-
-`/api/note`
-: save a `{{note}}` (POST, with the editor password)
-
-`/api/tasks`
-: toggle, add and delete a task (POST, with the editor password)
-
-`/api/history?file=…&limit=…`
-: latest changes for `{{history}}`: only times, files and line counts (GET)
-
-`/api/history/restore`, `/api/history/purge`
-: restore a version and delete the history (POST, with the editor password)
-
-`/healthz`
-: healthcheck (`ok`)
-
-If a password is set, `/edit/…`, `/api/file`, `/api/new` and `/api/rename` require a login. For a `Host` that is not in `[api] allowed_hosts` the server answers with error 421.
-
-A tab name may only contain `A-Z a-z 0-9 _ . -`. Files with other names are ignored. The names `static`, `events`, `healthz`, `edit`, `api`, `history` and `media` are reserved, and so are the names of the built-in pages `h6082`, `showcase` and `docs`.
-
-## Security
-An overview is in the Security block on the [h6082](/h6082) page. Technical details:
-
+#
+## 🔧 Technical details
 - **Editor password** (`H6082_EDITOR_PASSWORD` in `.env`): HTTP Basic for `/edit/…` and every write API. Compared in constant time; after a wrong attempt the server answers with a 1 s delay.
 - **CSP**: only the application's scripts run (a random nonce per response). `<script>`, `onclick=` and `javascript:` from md never run.
 - **Frames**: `frame-ancestors 'self'` and `X-Frame-Options: SAMEORIGIN` protect against clickjacking.
@@ -178,25 +225,93 @@ An overview is in the Security block on the [h6082](/h6082) page. Technical deta
 - **Build**: package versions are pinned, fonts are verified via SHA-256 (`ADD --checksum`). `.dockerignore` lets only `app/` into the build.
 - **Writes**: the editor may write only to `content/config.toml`, `content/pages/*.md` and `content/system/<lang>/*.md`
 - **Request origin**: the API accepts only an `Origin` from `[api] allowed_hosts`
+
+## 🔒 Writes and network
 - the API requires the `X-H6082` header. A foreign website cannot send it from the browser without CORS, so other pages cannot change files.
 - writes are atomic via a temp file and a rename, a file is never left half-written
 - concurrency check: the editor never overwrites a change made elsewhere
 - size limit `max_size_kb`
-- system files (`h6082`, `showcase`, `docs`, `config.toml`) cannot be deleted, only your copy of a built-in page can be reset; deleting is just a move to `content/.trash/`
+- system files (`h6082`, `markdown`, `docs`, `config.toml`) cannot be deleted, only your copy of a built-in page can be reset to default; deleting is just a move to `content/.trash/`
 - `/api/check` and `/api/rss` work only with targets and feeds written in md files, so the server cannot be abused to scan a network
 - RSS is parsed with `defusedxml` (protection against XML bombs and external entities). Only `http(s)` links get into the page, inserted as text, not as HTML.
 - checks and RSS follow redirects only to `http(s)` and at most 3 times
 
-## Cleanup
-```bash
-# stop + delete the image
-docker compose down --rmi local
-# old layers after rebuilds
-docker image prune -f
+#__ Editor and content
+## `Editor and content`
+
+#+
+## Editor
+Saves by itself after a short pause in typing, ++ctrl+s++ saves at once. Live preview on the right.
+
+- **editor | preview divider**: drag it; a double-click puts it back in the middle, ++arrow-left++ ++arrow-right++ work on the focused divider. The width is remembered in the browser.
+- **preview** (the button next to *view*) or ++alt+p++: hides / shows the preview
+- **rename / delete** next to the file name: renaming takes the translations, the history and references in `config.toml` along; deleting moves the file to `content/.trash/`. A customised system page has *reset to default* here.
+- **pairing**: `` ( [ { < " ' ` `` close themselves, typing the closer just steps over it, ++backspace++ deletes an empty pair
+- **lists and quotes**: ++enter++ continues `-`, `1.`, `- [ ]` and `>`; ++enter++ on an empty item ends the list. ```` ```lang ```` + ++enter++ closes the code block.
+- **indent**: ++tab++ / ++shift+tab++ indents a list item or all selected lines
+- **selected text**: typing `*` wraps it in italics, another `*` makes it bold; `_` italics, `~` ~~strikethrough~~, `=` ==highlight==, `` ` `` code (several lines → a ```` ``` ```` block). Spaces at the edges of the selection stay outside; with several lines each one is wrapped on its own and list markers stay in place.
+- **pasting a URL** over selected text makes a link `[text](url)`
+- a file changed elsewhere (vim, git) is never overwritten; the editor offers *reload from file* or *overwrite*
+- invalid TOML is saved, but the last valid config stays in effect
+- **history** shows the file's versions, diff and restore
+- access is protected by the password from `.env`
+
+| shortcut | action |
+|---|---|
+| ++ctrl+b++ | **bold** |
+| ++ctrl+i++ | *italic* |
+| ++ctrl+e++ | `code`, a block for several lines |
+| ++ctrl+k++ | link `[text]()`, a selected URL becomes `[](url)` |
+| ++ctrl+shift+x++ | ~~strikethrough~~ |
+| ++ctrl+shift+h++ | ==highlight== |
+| ++ctrl+shift+8++ | bullets `- ` |
+| ++ctrl+shift+7++ | numbered list `1. ` |
+| ++ctrl+shift+9++ | tasks `- [ ] ` |
+| ++ctrl+z++ | undoes the automatic edits too |
+
+Formatting shortcuts toggle: pressing one again removes the format. Without a selection they apply to the word under the cursor; outside a word they insert an empty pair. On a Mac ++cmd++ works instead of ++ctrl++. Formatting and shortcuts apply to `.md` files only, not to `config.toml`.
+
+#
+## [editor]
+`enabled` · `true`
+: web editor (`/edit/…`) and the saving API. The password is set in `.env` (`H6082_EDITOR_PASSWORD`), not here.
+
+`autosave_ms` · `800`
+: autosave delay after the last key press
+
+`max_size_kb` · `1024`
+: max. size of a saved file
+
+On a conflict the editor offers *reload from file* or *overwrite*. Controls are in the Editor block.
+
+## Languages
+The UI and the built-in pages (h6082, markdown, documentation) are available in English and Czech. The language is chosen in the drop-down in the top bar of the h6082 page, or in `[page] lang`. The choice is saved to `config.toml` and applies everywhere.
+
+**Translations of your own tabs:** next to `name.md` save `name.cs.md` (or `name.en.md`). The tab then shows the version for the selected language; if a translation is missing, it shows `name.md`. The tab appears only once in the bar. Deleting a tab deletes its translations too.
+
+| file | shown when |
+|---|---|
+| `demo-cafe.md` | default version (English here) |
+| `demo-cafe.cs.md` | with `lang = "cs"` |
+| `demo-cafe.en.md` | with `lang = "en"`, optional instead of the default version |
+
+Preview of another language without saving: `/<name>?lang=cs`.
+
+## Top bar
+```text
+[header] | [tabs…] ……… [hidden] [language ▾] [theme ▾] ⚙ ●
 ```
+- **header**: `[page] header`
+- **tabs**: user `.md` files from the left, ordered by `[tabs] order`
+- **hidden**: shown only while viewing a hidden tab (dashed frame)
+- **language, theme**: drop-downs, only on the h6082 page
+- **⚙**: the h6082 page (`[page] about_tab`): overview, files, settings
+- **●**: live reload, green = connected
 
-# Page
+#__ Configuration
+## `Configuration`
 
+#
 ## Config format
 The file `content/config.toml` is in TOML format. Values with a unit are CSS values and are written as strings, e.g. `"12px"` or `"1.2em"`. Colours can be in any CSS format: `#rrggbb`, `rgb()`, `hsl()` or a name.
 ```toml
@@ -207,25 +322,15 @@ accent = "#a882ff"
 ```
 A missing key has its default value.
 
-## Top bar
-```text
-[header] | [tabs…] ……… [hidden] [h6082] ●
-```
-- **header**: `[page] header`
-- **tabs**: user `.md` files from the left, ordered by `[tabs] order`
-- **hidden**: shown only while viewing a hidden tab (dashed frame)
-- **h6082**: `[page] about_tab`, info, file list and editor
-- **●**: live reload, green = connected
-
 ## [page]
 `title` · `"h6082"`
 : browser title; with several tabs shown as `<tab> · <title>`
 
-`favicon` · `"◆"`
-: a character or emoji as the browser tab icon
+`favicon` · `""`
+: browser tab icon: `""` = the built-in purple diamond, otherwise a single character or emoji (`"🚀"`)
 
 `lang` · `"en"`
-: language of the UI and the built-in pages: `en` or `cs`. Also switched by the Language block on the h6082 page (`{{lang}}`), which writes the choice here.
+: language of the UI and the built-in pages: `en` or `cs`. Also switched by the drop-down in the top bar of the h6082 page (or the `{{lang}}` shortcode), which writes the choice here.
 
 `links_new_tab` · `true`
 : external links (`http`/`https`) open in a new tab
@@ -244,72 +349,21 @@ A missing key has its default value.
 : order of the user tabs from the left by file name. The first one is the home page `/`. Files not in the list follow alphabetically.
 
 `labels` · `{}`
-: labels, e.g. `{ docs = "config" }`. The default label is the file name. A label can also be given per language: `{ demo = { en = "demo tab", cs = "demo záložka" } }`.
+: labels, e.g. `{ docs = "help" }`. The default label is the file name. A label can also be given per language: `{ demo-cafe = { en = "café", cs = "kavárna" } }`.
 
 `hidden` · `[]`
-: tabs hidden from the bar, still reachable via `/<name>` and from the file list on h6082. The built-in pages (markdown, config) are never in the bar, no need to hide them.
+: tabs hidden from the bar, still reachable via `/<name>` and from the file list on h6082. The built-in pages (markdown, documentation) are never in the bar, no need to hide them.
 
 `show_single` · `false`
 : show the bar even if there is only one user tab
 ```toml
 [tabs]
 order  = ["dev", "infra", "notes"]
-labels = { showcase = "markdown" }
+labels = { docs = "help", dev = { en = "dev", cs = "vývoj" } }
 hidden = ["drafts"]
 ```
 
-## Languages
-The UI and the built-in pages (h6082, markdown, config) are available in English and Czech. The language is chosen in the **Language** block on the h6082 page, or in `[page] lang`.
-
-**Translations of your own tabs:** next to `name.md` save `name.cs.md` (or `name.en.md`). The tab then shows the version for the selected language; if a translation is missing, it shows `name.md`. The tab appears only once in the bar. Deleting a tab deletes its translations too.
-
-| file | shown when |
-|---|---|
-| `demo.md` | default version |
-| `demo.cs.md` | with `lang = "cs"` |
-| `demo.en.md` | with `lang = "en"` (optional) |
-
-Preview of another language without saving: `/<name>?lang=cs`.
-
-## [editor]
-`enabled` · `true`
-: web editor (`/edit/…`) and the saving API. The password is set in `.env` (`H6082_EDITOR_PASSWORD`), not here.
-
-`autosave_ms` · `800`
-: autosave delay after the last key press
-
-`max_size_kb` · `1024`
-: max. size of a saved file
-
-On a conflict the editor offers *reload from file* or *overwrite*. Controls are in the Editor block.
-
-## Editor
-Saves by itself after a short pause in typing, ++ctrl+s++ saves at once. Live preview on the right.
-
-- **editor | preview divider**: drag it; a double-click puts it back in the middle, ++arrow-left++ ++arrow-right++ work on the focused divider. The width is remembered in the browser.
-- **preview** (the button next to *view*) or ++alt+p++: hides / shows the preview
-- **rename / delete** next to the file name: renaming takes the translations, the history and references in `config.toml` along; deleting moves the file to `content/.trash/`. A customised system page has *reset to default* here.
-- **pairing**: `` ( [ { < " ' ` `` close themselves, typing the closer just steps over it, ++backspace++ deletes an empty pair
-- **lists and quotes**: ++enter++ continues `-`, `1.`, `- [ ]` and `>`; ++enter++ on an empty item ends the list. ```` ```lang ```` + ++enter++ closes the code block.
-- **indent**: ++tab++ / ++shift+tab++ indents a list item or all selected lines
-- **selected text**: typing `*` wraps it in italics, another `*` makes it bold; `_` italics, `~` ~~strikethrough~~, `=` ==highlight==, `` ` `` code (several lines → a ```` ``` ```` block). Spaces at the edges of the selection stay outside; with several lines each one is wrapped on its own and list markers stay in place.
-- **pasting a URL** over selected text makes a link `[text](url)`
-
-| shortcut | action |
-|---|---|
-| ++ctrl+b++ | **bold** |
-| ++ctrl+i++ | *italic* |
-| ++ctrl+e++ | `code`, a block for several lines |
-| ++ctrl+k++ | link `[text]()`, a selected URL becomes `[](url)` |
-| ++ctrl+shift+x++ | ~~strikethrough~~ |
-| ++ctrl+shift+h++ | ==highlight== |
-| ++ctrl+shift+8++ | bullets `- ` |
-| ++ctrl+shift+7++ | numbered list `1. ` |
-| ++ctrl+shift+9++ | tasks `- [ ] ` |
-| ++ctrl+z++ | undoes the automatic edits too |
-
-Formatting shortcuts toggle: pressing one again removes the format. Without a selection they apply to the word under the cursor; outside a word they insert an empty pair. On a Mac ++cmd++ works instead of ++ctrl++. Formatting and shortcuts apply to `.md` files only, not to `config.toml`.
-
+#
 ## [api]
 `allowed_hosts` · `["127.0.0.1", "localhost"]`
 : hostname the server answers to (`Host`) and from which `/api` may be called (`Origin`). Applies to all pages. Add another name here when accessing the page through it.
@@ -344,27 +398,13 @@ ICMP ping is not possible in the container, as it runs without root privileges. 
 
 A version is **the state of the file before a change**. Edits from the editor and from elsewhere (vim, git) are caught: the server checks the files every 2 s. Before a restore, the current state is saved as a new version, so a restore can be undone too. Version contents, diff and restore are behind the editor password. The `{{history}}` block shows only times, names and line counts.
 
-## Read-only mode
-`H6082_READONLY=1` turns the application into a public, read-only page — e.g. a demo on the internet:
+## [markdown]
+`line_breaks` · `true`
+: ++enter++ in text = a new line, an empty line = a new paragraph. `false` restores the classic markdown behaviour (lines are joined).
 
-- nothing can be saved: the editor, new files, deleting, notes, tasks, theme, language and history return `403`, and their controls are hidden
-- content comes only from the image (`app/defaults/`): no volume, nothing to fill or overwrite
-- live reload (`/events`), server stats (`/api/sys`) and the change history are off
-- a visitor's theme and language are kept only in their own browser (cookie); the server stores nothing
-- service status and RSS keep working, only for targets written in the image's md files
+A line with only `/` inserts an empty line, `//` two. Outside a block (under `#`, above `##`) it makes a gap between blocks. A line starting with `// text` is a hidden comment.
 
-Run it with a read-only file system and no volume (see `h6082-deploy-demo`); even a bug in the application then has nowhere to write, and a restart is always clean.
-
-## Demo mode
-The `{{sys}}` and `{{history}}` blocks have a `demo` switch. With it they show **made-up data**, generated in the browser without asking the server. Handy for examples, documentation and public pages.
-
-| block | demo | real data |
-|---|---|---|
-| server | `{{sys demo}}` | `{{sys}}` + `[system] enabled = true` |
-| history | `{{history 5 demo}}` | `{{history 5}}` |
-
-The examples in **demo** and **markdown** use demo mode, so they reveal neither server data nor the names of your files.
-
+#
 ## [system]
 `enabled` · `false`
 : real values for `{{sys [parts…]}}` and the `/api/sys` endpoint. Off by default, because `/api/sys` is visible to anyone who can see the page. `{{sys demo}}` with made-up data works even when disabled.
@@ -412,14 +452,16 @@ The values come from the host (`/proc`, `/sys` are shared with the kernel). Netw
 
 The background of code blocks is always `code_bg`, only the token colours come from the scheme.
 
-# Look
+#__ Look
+## `Look`
 
+#
 ## [layout]
 `columns_fixed` · `0`
-: `0` = number of columns by window width, `N` = always N columns
+: `0` = number of columns by window width, `N` = N regular columns per row
 
 `column_min_width` · `"240px"`
-: min. column width in automatic mode
+: min. column width in automatic mode. `#+` / `#++` columns are 1.5× / 2× wider, `#-` / `#--` half / a quarter. `#__` is a full-width band. The syntax is shown on the [markdown showcase](/markdown#columns).
 
 `page_max_width` · `"1600px"`
 : max. content width, `"none"` = full width
@@ -460,10 +502,25 @@ Up to 640 px width there is always one column.
 `block_title_transform` · `"none"`
 : block titles: `none`, `uppercase`, `lowercase`, `capitalize`
 
-# Colours
+#
+## [style]
+Content typography, each element has its own section: `[style.text]`, `[style.h2]` to `[style.h6]`, `bold`, `italic`, `strike`, `highlight`, `link`, `code`, `code_block`, `quote`, `list`, `task`, `callout`, `kbd`, `tip`, `table` and `bracket_round` / `square` / `curly` / `angle` for text in brackets.
 
+| key | CSS |
+|:--|:--|
+| `color`, `bg` | text colour, background |
+| `size`, `weight`, `style` | size, weight, italics |
+| `space_before`, `space_after` | space above and below |
+| `padding`, `radius`, `border` | padding, corner radius, border |
+
+- `""` = built-in look; a colour can be a theme colour name (`muted`, `accent`, `h3`…), then it changes with the theme
+- `em` is a multiple of the font size: `1em` = the font height, so spacing grows with `[font] size`
+- all keys with their defaults and comments are in the default `config.toml`
+- changes take effect right after a save
+
+#
 ## Themes
-The picker is in the Theme block on the h6082 page. A click on a tile writes the theme to `config.toml` as `[theme] default` (with the editor password), so it applies to every browser. All other lines and comments in the config stay unchanged.
+The picker is in the drop-down in the top bar of the h6082 page. The choice writes the theme to `config.toml` as `[theme] default` (with the editor password), so it applies to every browser. All other lines and comments in the config stay unchanged.
 
 | theme | type | code |
 |---|---|---|
@@ -483,7 +540,7 @@ The picker is in the Theme block on the h6082 page. A click on a tile writes the
 
 `obsidian` = colours from `[colors]` (default). `auto` picks between `auto_dark` and `auto_light` according to the OS setting and switches live.
 
-Preview without saving: `?theme=<theme>`, e.g. [/docs?theme=paper](/docs?theme=paper).
+Preview without saving the choice: `?theme=<theme>`, e.g. [/docs?theme=paper](/docs?theme=paper).
 
 ## [theme]
 `default` · `"obsidian"`
@@ -521,6 +578,7 @@ text   = "#202020"
 accent = "#b48ead"
 ```
 
+#
 ## [colors] basics
 | key | default | used for |
 |---|---|---|
@@ -554,3 +612,92 @@ accent = "#b48ead"
 
 > [!tip] Light theme
 > Override `bg`, `panel`, `border`, `text`, `muted` and `code_bg`. Then adjust `h3`, `link` and `code_fg` so they keep enough contrast.
+
+#__ Endpoints
+## `Endpoints`
+
+#
+## Pages and files
+`/`
+: the first tab
+
+`/<name>`
+: tab `pages/<name>.md` (or its translation, see Languages)
+
+`/<name>?lang=en`
+: preview of a tab in another language, nothing is saved
+
+`/<name>?embed=1`
+: tab without the top bar (editor preview)
+
+`/edit/<file>`
+: web editor (`<name>.md`, `<name>.cs.md`, `system/<lang>/<name>.md` or `config.toml`)
+
+`/themes.css`
+: CSS of all themes (generated from the config)
+
+`/media/<file>`
+: own images from `content/media/` (svg, png, jpg, webp, gif, avif, ico) with CSP `sandbox`
+
+`/static/…`
+: CSS, font, images
+
+`/events`
+: SSE stream for live reload
+
+`/history/<file>`
+: list of versions, diff and restore (with the editor password)
+
+`/healthz`
+: healthcheck (`ok`)
+
+#
+## Read API
+`/api/file?name=…`
+: read (GET) and save (PUT) a file for the editor
+
+`/api/check`
+: service status (POST, list of targets)
+
+`/api/rss?url=…&limit=…`
+: feed items (GET)
+
+`/api/sys`
+: system stats for `{{sys}}` (GET)
+
+`/api/history?file=…&limit=…`
+: latest changes for `{{history}}`: only times, files and line counts (GET)
+
+## Rules
+If a password is set, `/edit/…`, `/api/file`, `/api/new` and `/api/rename` require a login. For a `Host` that is not in `[api] allowed_hosts` the server answers with error 421.
+
+A tab name may only contain `A-Z a-z 0-9 _ . -`. Files with other names are ignored. The names `static`, `events`, `healthz`, `edit`, `api`, `history` and `media` are reserved, and so are the names of the built-in pages `h6082`, `markdown` and `docs`.
+
+#
+## Write API
+`/api/file?name=…` DELETE
+: delete a user tab with its translations (for a translation only that file), i.e. move it to `content/.trash/<name>.<time>.md`
+
+`/api/new`
+: create a new `.md` (POST)
+
+`/api/rename`
+: rename a tab with its translations and history (POST `{name, to}`); references in `[tabs] order`, `hidden`, `labels` and `[page] about_tab` in `config.toml` are updated too. A translation is renamed on its own.
+
+`/api/theme`
+: save the theme to `[theme] default` (POST, with the editor password)
+
+`/api/lang`
+: save the language to `[page] lang` (POST, with the editor password)
+
+`/api/note`
+: save a `{{note}}` (POST, with the editor password)
+
+`/api/block`
+: save a `##*` block edited right on the page (POST `{file, i, orig, text}`, with the editor password)
+
+`/api/tasks`
+: toggle, add and delete a task (POST, with the editor password)
+
+`/api/history/restore`, `/api/history/purge`
+: restore a version and delete the history (POST, with the editor password)

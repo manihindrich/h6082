@@ -173,6 +173,12 @@ A single Python file on the standard library HTTP server, with
 [Python-Markdown](https://python-markdown.github.io/), [PyMdown Extensions](https://facelessuser.github.io/pymdown-extensions/)
 and [Pygments](https://pygments.org/). No JavaScript framework, no database, no build step for your content.
 
+## Licence
+
+h6082 is free software: you can redistribute and/or modify it under the terms of the
+[GNU General Public License v3.0](LICENSE) (or any later version). Bundled and used components keep
+their own licences:
+
 | Component | Licence |
 |---|---|
 | JetBrains Mono | OFL-1.1 |

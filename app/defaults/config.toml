@@ -2,26 +2,33 @@
 # Changes apply after a page reload (no container restart needed).
 # Missing keys take their default value, unknown keys are ignored (warning in the log).
 # On a syntax error the last working configuration stays in effect.
-# Full description: the "config" tab (content/system/<lang>/docs.md).
+# Full description: the "documentation" page (content/system/<lang>/docs.md).
 
 [page]
 title         = "h6082"    # browser tab title (with several tabs: "<tab> · <title>")
-favicon       = "◆"        # one character / emoji, rendered as the browser tab icon
-lang          = "en"       # UI and built-in pages language: en | cs (also set by the Language block on h6082)
+favicon       = ""         # browser tab icon: "" = the built-in purple diamond, or one character / emoji ("🚀")
+lang          = "en"       # UI and built-in pages language: en | cs (also set by the language drop-down on h6082)
 links_new_tab = true       # open external links (http/https) in a new tab
-header        = "**h6082** · demo"   # header on the left of the top bar (inline markdown); "" = none
+header        = "**h6082** · homepage"   # header on the left of the top bar (inline markdown); "" = none
 live_reload   = true       # the page refreshes itself after an .md / config save
-about_tab     = "h6082"    # tab at the top right (built-in page h6082) — info, files, editor; "" = none
 
 [tabs]
 # Each content/pages/*.md is one tab; the name = file name without .md.
 # name.cs.md / name.en.md is a translation of name.md, shown according to [page] lang.
 # User tabs are on the left; the about tab ([page] about_tab) is on the right.
-order       = ["demo"]     # order from the left, e.g. ["dev", "infra"]; other files follow alphabetically
-# tab labels (default = file name); a plain string, or one label per language
-labels      = { showcase = "markdown", docs = "config", demo = { en = "demo tab", cs = "demo záložka" } }
+order       = []         # order from the left, e.g. ["dev", "infra"]; other files follow alphabetically
 hidden      = []           # hidden from the bar, still reachable via /<name> and from the h6082 page
 show_single = true         # show the bar even with a single user tab
+
+[tabs.labels]
+# tab labels (default = file name): a plain string, or one label per language.
+# The file name stays one; the label works as a per-language alias in the tab bar.
+demo-admin             = { en = "demo · sysadmin",   cs = "demo · správce serverů" }
+demo-designer        = { en = "demo · designer",   cs = "demo · designérka" }
+demo-cafe           = { en = "demo · café",       cs = "demo · kavárna" }
+demo-key-worker = { en = "demo · key worker", cs = "demo · klíčový pracovník" }
+demo-family            = { en = "demo · family",     cs = "demo · rodina" }
+demo-student           = { en = "demo · student",    cs = "demo · studentka" }
 
 [editor]
 # Web editor for files (/edit/<file>). The editor password is set in .env (H6082_EDITOR_PASSWORD),
@@ -99,8 +106,12 @@ disks = [
 ]
 
 [layout]
-columns_fixed    = 0               # 0 = number of columns by window width; N = always N columns
-column_min_width = "240px"         # min. column width in automatic mode
+# In a page: "#" starts a column, "#+" / "#++" a 1.5x / 2x wide one, "#-" / "#--" a 0.5x / 0.25x narrow
+# one, "#__" a row across the full width (below the columns before it, above the ones after it). Columns that do not fit
+# wrap to the next line and stretch over the free width. A line starting with "//" is a hidden note;
+# a line of only slashes adds empty lines: "/" one, "//" two, "///" three …
+columns_fixed    = 0               # 0 = number of columns by window width; N = N columns per row
+column_min_width = "240px"         # min. column width in automatic mode (#+ / #++ = 1.5x / 2x)
 page_max_width   = "1600px"        # max. content width ("none" = full width)
 padding          = "14px"          # page margin
 gap              = "12px"          # space between columns and below the tab bar
@@ -137,6 +148,201 @@ callout_tip     = "#00bfa5"  # [!tip], hint, important, success
 callout_info    = "#00b8d4"  # [!info], todo, question, faq
 callout_warning = "#ff9100"  # [!warning], caution, attention
 callout_danger  = "#ff5252"  # [!danger], error, bug, failure
+
+[markdown]
+line_breaks = true         # Enter = a new line; an empty line (Enter twice) = a new paragraph. false = classic markdown
+
+# ---- typography of the content ([style.<element>]) --------------------------------------------
+# Every value is CSS. "" = the built-in look. Colours: a theme colour name (text, muted, accent,
+# h2, h3, link, link_hover, code_fg, code_bg, mark_bg, quote_border, callout_…) follows the active
+# theme; "#ff8800" or any CSS colour is fixed for all themes.
+# Common keys: color, bg, size, weight (400 / 700), style (italic), transform (uppercase …),
+# letter_spacing, line_height, space_before, space_after, indent, padding, radius, border, decoration.
+# Changes apply live after saving.
+
+[style.text]               # plain paragraphs
+color        = ""
+size         = ""          # e.g. "1.05em"
+weight       = ""
+line_height  = ""          # e.g. "1.55"; "" = [font] line_height
+space_before = "0"
+space_after  = "0.45em"    # gap between paragraphs (Enter twice)
+
+[style.h2]                 # block titles (##)
+color          = ""        # "" = theme colour h2
+size           = "1em"
+weight         = "700"
+style          = ""
+transform      = ""        # "" = [font] block_title_transform
+letter_spacing = ".02em"
+space_after    = "1em"
+border         = ""        # line under the title, e.g. "1px solid" / "none"
+
+[style.h3]                 # ### — space_before / space_after = gap above / below
+color = ""                 # "" = theme colour h3
+size = ".95em"
+weight = "700"
+style = ""
+transform = ""
+letter_spacing = ""
+space_before = "8px"
+space_after = "2px"
+
+[style.h4]
+color = "muted"
+size = ".9em"
+weight = "700"
+style = ""
+transform = ""
+letter_spacing = ""
+space_before = "6px"
+space_after = "1px"
+
+[style.h5]
+color = "muted"
+size = ".85em"
+weight = "400"
+style = ""
+transform = ""
+letter_spacing = ""
+space_before = "4px"
+space_after = "0"
+
+[style.h6]
+color = "muted"
+size = ".85em"
+weight = "400"
+style = "italic"
+transform = ""
+letter_spacing = ""
+space_before = "4px"
+space_after = "0"
+
+[style.bold]               # **bold**
+color  = ""
+weight = "700"
+
+[style.italic]             # *italic*
+color = ""
+style = "italic"
+
+[style.strike]             # ~~strikethrough~~
+color      = "muted"
+decoration = "line-through"
+
+[style.highlight]          # ==highlight==
+color   = ""
+bg      = ""               # "" = theme colour mark_bg
+padding = "0 .15em"
+radius  = "2px"
+
+[style.link]               # links and URLs
+color            = ""      # "" = theme colour link
+hover_color      = ""      # "" = theme colour link_hover
+weight           = ""
+decoration       = "none"  # none | underline | underline dotted
+hover_decoration = "underline"
+
+[style.code]               # `inline code`
+color   = ""               # "" = theme colour code_fg
+bg      = ""               # "" = theme colour code_bg
+size    = ".95em"
+weight  = ""
+padding = "0 .3em"
+radius  = "3px"
+
+[style.code_block]         # ``` code blocks (colours: [code] pygments_style)
+size         = ""
+line_height  = "1.35"
+padding      = "5px 8px"
+radius       = "4px"
+border       = ""          # e.g. "1px solid" / "none"
+space_before = "0.6em"
+space_after  = "0.6em"
+
+[style.quote]              # > quotes
+color        = "muted"
+style        = ""          # "italic"
+border       = ""          # left line, e.g. "3px solid" / "2px dashed"
+padding      = "1px 8px"
+space_before = "4px"
+space_after  = "4px"
+
+[style.list]               # - and 1. lists
+indent       = "1.2em"
+marker       = "› "        # bullet text: "• ", "– ", "none" = no bullet
+marker_color = "muted"     # bullets and numbers
+item_gap     = "0"         # gap between items
+space_before = "0.3em"
+space_after  = "0.45em"
+
+[style.task]               # - [ ] tasks
+checkbox_color  = ""       # "" = theme colour accent
+done_color      = ""       # finished tasks, e.g. "muted"
+done_decoration = ""       # e.g. "line-through"
+
+[style.callout]            # > [!note] callouts (colours per type: [colors] callout_*)
+padding      = "3px 8px"
+radius       = "3px"
+border_width = "3px"       # the left line
+bg_opacity   = "10"        # background tint in %
+title_weight = "700"
+title_size   = ""
+space_before = "4px"
+space_after  = "4px"
+
+[style.kbd]                # ++ctrl+b++ keys
+color  = ""
+bg     = ""                # "" = theme colour code_bg
+size   = ".88em"
+radius = "3px"
+border = ""
+
+[style.tip]                # [?](hint) / [★](?hint): an icon with a hint on hover
+color       = "muted"
+hover_color = "accent"
+size        = ".9em"
+weight      = ""
+
+[style.table]
+size         = ".95em"
+cell_padding = "1px 6px"
+border       = ""          # cell borders, e.g. "1px solid" / "none"
+header_color = ""          # "" = theme colour h3
+header_bg    = ""          # "" = theme colour code_bg
+stripes      = ""          # background of every other row, e.g. "panel" / "none"
+space_before = "4px"
+space_after  = "4px"
+
+# Text in brackets inside paragraphs: (round), [square], {curly}, «angle».
+# A type is styled only when one of its values is set; code and keys are never touched.
+[style.bracket_round]
+color  = ""                # e.g. "muted" for (side notes)
+bg     = ""
+weight = ""
+style  = ""
+size   = ""
+
+[style.bracket_square]
+color  = ""
+bg     = ""
+weight = ""
+style  = ""
+size   = ""
+
+[style.bracket_curly]
+color  = ""
+bg     = ""
+weight = ""
+style  = ""
+size   = ""
+
+[style.bracket_angle]
+color  = ""
+bg     = ""
+weight = ""
+style  = ""
+size   = ""
 
 [code]
 pygments_style = "monokai"   # code block scheme: monokai, dracula, one-dark, nord, gruvbox-dark, material, github-dark, …

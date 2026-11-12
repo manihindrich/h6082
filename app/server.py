@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Mani Hindrich — see LICENSE
 """h6082 — a compact start page generated from markdown.
 
 Each content/pages/*.md is one tab. In a file: `#` = (invisible) column,
@@ -15,6 +17,7 @@ import hmac
 import secrets
 import email.utils
 import html
+import ipaddress
 import json
 import logging
 import os
@@ -25,8 +28,10 @@ import tempfile
 import threading
 import time
 import tomllib
+import unicodedata
 import urllib.error
 import urllib.request
+import xml.etree.ElementTree as etree
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -64,7 +69,7 @@ MEDIA_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*\.(svg|png|jpe?g|webp|gif|avi
 SYSTEM = CONTENT / "system"                  # user overrides of built-in pages: system/<lang>/<name>.md
 DEFAULTS_DIR = APP / "defaults"              # shipped with the image: system pages, demo, media, config
 DEFAULT_SYSTEM = DEFAULTS_DIR / "system"
-SYSTEM_PAGES = {"h6082", "showcase", "docs"}  # + [page].about_tab; cannot be deleted
+SYSTEM_PAGES = {"h6082", "markdown", "docs"}  # + [page].about_tab; cannot be deleted
 TRASH = CONTENT / ".trash"                   # "deleted" files (can be restored)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -73,7 +78,7 @@ log = logging.getLogger("h6082")
 DEFAULTS = {
     "page": {
         "title": "home",
-        "favicon": "◆",
+        "favicon": "",            # "" = the built-in purple diamond; or any character / emoji
         "lang": "en",
         "links_new_tab": True,
         "header": "",
@@ -144,6 +149,47 @@ DEFAULTS = {
         "callout_info": "#00b8d4",
         "callout_warning": "#ff9100",
         "callout_danger": "#ff5252",
+    },
+    "markdown": {
+        "line_breaks": True,      # Enter = a new line; an empty line = a new paragraph
+    },
+    # Typography of the content. "" = the built-in look / the theme colour. Colours may name a
+    # theme colour (text, muted, accent, h2, h3, link, code_fg, …) or be any CSS colour.
+    "style": {
+        "text":       {"color": "", "size": "", "weight": "", "line_height": "", "space_before": "0", "space_after": "0.45em"},
+        "h2":         {"color": "", "size": "1em", "weight": "700", "style": "", "transform": "", "letter_spacing": ".02em",
+                       "space_after": "1em", "border": ""},
+        "h3":         {"color": "", "size": ".95em", "weight": "700", "style": "", "transform": "", "letter_spacing": "",
+                       "space_before": "8px", "space_after": "2px"},
+        "h4":         {"color": "muted", "size": ".9em", "weight": "700", "style": "", "transform": "", "letter_spacing": "",
+                       "space_before": "6px", "space_after": "1px"},
+        "h5":         {"color": "muted", "size": ".85em", "weight": "400", "style": "", "transform": "", "letter_spacing": "",
+                       "space_before": "4px", "space_after": "0"},
+        "h6":         {"color": "muted", "size": ".85em", "weight": "400", "style": "italic", "transform": "", "letter_spacing": "",
+                       "space_before": "4px", "space_after": "0"},
+        "bold":       {"color": "", "weight": "700"},
+        "italic":     {"color": "", "style": "italic"},
+        "strike":     {"color": "muted", "decoration": "line-through"},
+        "highlight":  {"color": "", "bg": "", "padding": "0 .15em", "radius": "2px"},
+        "link":       {"color": "", "hover_color": "", "weight": "", "decoration": "none", "hover_decoration": "underline"},
+        "code":       {"color": "", "bg": "", "size": ".95em", "weight": "", "padding": "0 .3em", "radius": "3px"},
+        "code_block": {"size": "", "line_height": "1.35", "padding": "5px 8px", "radius": "4px", "border": "",
+                       "space_before": "0.6em", "space_after": "0.6em"},
+        "quote":      {"color": "muted", "style": "", "border": "", "padding": "1px 8px", "space_before": "4px", "space_after": "4px"},
+        "list":       {"indent": "1.2em", "marker": "› ", "marker_color": "muted", "item_gap": "0",
+                       "space_before": "0.3em", "space_after": "0.45em"},
+        "task":       {"checkbox_color": "", "done_color": "", "done_decoration": ""},
+        "callout":    {"padding": "3px 8px", "radius": "3px", "border_width": "3px", "bg_opacity": "10",
+                       "title_weight": "700", "title_size": "", "space_before": "4px", "space_after": "4px"},
+        "kbd":        {"color": "", "bg": "", "size": ".88em", "radius": "3px", "border": ""},
+        "tip":        {"color": "muted", "hover_color": "accent", "size": ".9em", "weight": ""},
+        "table":      {"size": ".95em", "cell_padding": "1px 6px", "border": "", "header_color": "", "header_bg": "",
+                       "stripes": "", "space_before": "4px", "space_after": "4px"},
+        # text in brackets inside paragraphs, e.g. "(a note)"; a type is styled only when set
+        "bracket_round":  {"color": "", "bg": "", "weight": "", "style": "", "size": ""},
+        "bracket_square": {"color": "", "bg": "", "weight": "", "style": "", "size": ""},
+        "bracket_curly":  {"color": "", "bg": "", "weight": "", "style": "", "size": ""},
+        "bracket_angle":  {"color": "", "bg": "", "weight": "", "style": "", "size": ""},
     },
     "code": {
         "pygments_style": "monokai",
@@ -265,14 +311,12 @@ STRINGS = {
         "auto_system": "auto (system)",
         "dark": "dark",
         "light": "light",
-        "st_tab": "tab",
-        "st_right": "top right",
-        "st_hidden": "hidden",
-        "st_config": "configuration",
-        "st_custom": "customised",
         "no_files": "no files",
         "newfile_placeholder": "name",
         "newfile_button": "create",
+        "newfile_title": "Creates pages/<name>.md from a template and opens it in the editor.",
+        "pick_lang": "language",
+        "pick_theme": "theme",
         "rss_disabled": "RSS is disabled ([rss] enabled)",
         "rss_bad": "{{rss}}: missing or invalid feed URL",
         "loading_feed": "loading feed…",
@@ -288,6 +332,9 @@ STRINGS = {
         "task_delete": "delete task",
         "ed_view": "view ↗",
         "ed_history": "history",
+        "ed_help": "help ↗",
+        "ed_help_title": "editor controls and shortcuts (documentation)",
+        "ed_md_title": "every markdown element with an example",
         "ed_preview": "preview",
         "ed_preview_title": "show / hide the preview (Alt+P)",
         "ed_split": "drag to resize, double-click resets",
@@ -295,11 +342,22 @@ STRINGS = {
         "ed_force": "overwrite",
         "ed_back": "back",
         "ed_rename": "rename",
+        "block_edit": "edit this block",
+        "err_block_changed": "the block was changed elsewhere — the page reloads, try again",
+        "err_block_heading": "a block cannot contain # / ## lines — add new blocks in the editor",
         "ed_delete": "delete",
+        "ed_delete_title": "Deleting moves the file and its translations to content/.trash/.",
         "ed_reset": "reset to default",
         "f_view": "view ↗",
         "f_edit": "edit",
-        "f_edit_lang": "edit {lang}",
+        "f_docs": "documentation",
+        "f_docs_desc": "settings, operation, security",
+        "f_config_desc": "config.toml: look, tabs, features",
+        "f_markdown_desc": "every element with an example",
+        "f_config": "configuration",
+        "f_showcase": "showcase ↗",
+        "ed_lang_base": "default",
+        "ed_lang_new_title": "create the translation {f}",
         "err_rename_target": "a tab can't be renamed to a translation name (name.{lang})",
         "warn_rename_config": "config.toml still refers to {old} — it could not be updated automatically, change it by hand",
         "js_rename_prompt": "New name (without .md). Translations are renamed with the tab:",
@@ -358,11 +416,18 @@ STRINGS = {
         "err_file_changed": "the file was changed elsewhere",
         "err_write_failed": "write failed: {e}",
         "err_checks_off": "checks are disabled",
-        "err_bad_name": "invalid name (A-Z a-z 0-9 _ . -; reserved: static, events, healthz, edit, api, history, media, h6082, showcase, docs)",
+        "err_bad_name": "invalid name (A-Z a-z 0-9 _ . -; reserved: static, events, healthz, edit, api, history, media, h6082, markdown, docs)",
         "err_exists": "{name}.md already exists",
         "err_host_421": "host {host!r} is not in [api] allowed_hosts",
         "new_file": "# Column 1\n\n## Block\n- [link](https://example.com)\n\n# Column 2\n\n## Another block\ntext\n",
         "js_locale": "en-GB",
+        "js_copy": "copy",
+        "js_block_save": "save",
+        "js_block_cancel": "cancel",
+        "js_block_hint": "Ctrl+Enter saves, Esc cancels",
+        "js_block_saving": "saving…",
+        "js_copied": "copied",
+        "js_copy_failed": "copying failed",
         "js_theme_not_saved": "The theme was not saved: ",
         "js_lang_not_saved": "The language was not saved: ",
         "js_confirm_reset": "Reset {f} to the default version?\n\nYour changes are moved to content/.trash/.",
@@ -392,14 +457,12 @@ STRINGS = {
         "auto_system": "auto (systém)",
         "dark": "tmavé",
         "light": "světlé",
-        "st_tab": "záložka",
-        "st_right": "vpravo",
-        "st_hidden": "skrytá",
-        "st_config": "konfigurace",
-        "st_custom": "upraveno",
         "no_files": "žádné soubory",
         "newfile_placeholder": "název",
         "newfile_button": "vytvořit",
+        "newfile_title": "Vytvoří pages/<název>.md ze šablony a otevře ho v editoru.",
+        "pick_lang": "jazyk",
+        "pick_theme": "motiv",
         "rss_disabled": "RSS je vypnuté ([rss] enabled)",
         "rss_bad": "{{rss}}: chybí nebo je neplatná URL feedu",
         "loading_feed": "načítám feed…",
@@ -415,6 +478,9 @@ STRINGS = {
         "task_delete": "smazat úkol",
         "ed_view": "zobrazit ↗",
         "ed_history": "historie",
+        "ed_help": "nápověda ↗",
+        "ed_help_title": "ovládání a zkratky editoru (dokumentace)",
+        "ed_md_title": "všechny prvky markdownu s ukázkou",
         "ed_preview": "náhled",
         "ed_preview_title": "zobrazit / skrýt náhled (Alt+P)",
         "ed_split": "táhni pro změnu šířky, dvojklik vrátí na půl",
@@ -422,11 +488,22 @@ STRINGS = {
         "ed_force": "přepsat",
         "ed_back": "zpět",
         "ed_rename": "přejmenovat",
+        "block_edit": "upravit blok",
+        "err_block_changed": "blok se mezitím změnil jinde — stránka se načte znovu, zkus to pak",
+        "err_block_heading": "blok nesmí obsahovat řádky # / ## — nové bloky přidej v editoru",
         "ed_delete": "smazat",
+        "ed_delete_title": "Smazání přesune soubor i s překlady do content/.trash/.",
         "ed_reset": "vrátit výchozí",
         "f_view": "zobrazit ↗",
         "f_edit": "upravit",
-        "f_edit_lang": "upravit {lang}",
+        "f_docs": "dokumentace",
+        "f_docs_desc": "nastavení, provoz, bezpečnost",
+        "f_config_desc": "config.toml: vzhled, záložky, funkce",
+        "f_markdown_desc": "všechny prvky s ukázkou",
+        "f_config": "konfigurace",
+        "f_showcase": "showcase ↗",
+        "ed_lang_base": "výchozí",
+        "ed_lang_new_title": "vytvořit překlad {f}",
         "err_rename_target": "záložku nejde přejmenovat na název překladu (jméno.{lang})",
         "warn_rename_config": "config.toml dál odkazuje na {old} — automaticky ho nešlo upravit, změň ho ručně",
         "js_rename_prompt": "Nový název (bez .md). Překlady se přejmenují se záložkou:",
@@ -485,11 +562,18 @@ STRINGS = {
         "err_file_changed": "soubor byl změněn jinde",
         "err_write_failed": "zápis selhal: {e}",
         "err_checks_off": "kontroly jsou vypnuté",
-        "err_bad_name": "neplatný název (A-Z a-z 0-9 _ . -; rezervované: static, events, healthz, edit, api, history, media, h6082, showcase, docs)",
+        "err_bad_name": "neplatný název (A-Z a-z 0-9 _ . -; rezervované: static, events, healthz, edit, api, history, media, h6082, markdown, docs)",
         "err_exists": "{name}.md už existuje",
         "err_host_421": "host {host!r} není v [api] allowed_hosts",
         "new_file": "# Sloupec 1\n\n## Blok\n- [odkaz](https://example.com)\n\n# Sloupec 2\n\n## Další blok\ntext\n",
         "js_locale": "cs-CZ",
+        "js_copy": "kopírovat",
+        "js_block_save": "uložit",
+        "js_block_cancel": "zrušit",
+        "js_block_hint": "Ctrl+Enter uloží, Esc zruší",
+        "js_block_saving": "ukládám…",
+        "js_copied": "zkopírováno",
+        "js_copy_failed": "kopírování se nepovedlo",
         "js_theme_not_saved": "Motiv se neuložil: ",
         "js_lang_not_saved": "Jazyk se neuložil: ",
         "js_confirm_reset": "Vrátit {f} na výchozí verzi?\n\nTvoje úpravy se přesunou do content/.trash/.",
@@ -539,7 +623,13 @@ def js_strings(cfg):
 
 FENCE_RE = re.compile(r"^\s*(`{3,}|~{3,})")
 CALLOUT_RE = re.compile(r"^>\s*\[!(\w+)\]([+-]?)\s*(.*)$")
-COLUMN_RE = re.compile(r"^#(\s.*)?$")
+COLUMN_RE = re.compile(r"^#(\+\+|\+|--|-|__)?(\s.*)?$")   # # column, #+ 1.5x, #++ 2x, #- 0.5x, #-- 0.25x, #__ full-width row
+COMMENT_RE = re.compile(r"^ {0,3}//")                   # // a note in the md, never shown
+SPACER_RE = re.compile(r"^ {0,3}(/+)[ \t]*$")            # a line of only "/": that many empty lines
+BLOCK_RE = re.compile(r"^##(\s|\*|$)")                  # ## or ##* (a block heading, not ###)
+EDIT_BLOCK_RE = re.compile(r"^##\*[ \t]*(.*)$")          # ##* Title: the block can be edited on the page
+EDIT_MARK_RE = re.compile(r"\s*<!--h6082-edit:(\d+)-->")
+GAP_RE = re.compile(r"<!--h6082-gap:(\d+)-->")
 LIST_RE = re.compile(r"^\s{0,3}(?:[-*+]|\d+[.)])\s")
 TABLE_RE = re.compile(r"^\s{0,3}\|")
 QUOTE_RE = re.compile(r"^\s{0,3}>")
@@ -619,6 +709,13 @@ def seed_content():
         if not CFG_FILE.exists():
             write_atomic(CFG_FILE, (DEFAULTS_DIR / "config.toml").read_text(encoding="utf-8"))
             log.info("seeded config.toml")
+        # the built-in page "showcase" is now "markdown": move the user's own copies and history
+        for lang in LANGS:
+            for base in (SYSTEM / lang, CONTENT / ".history" / "system" / lang):
+                old, new = base / "showcase.md", base / "markdown.md"
+                if old.exists() and not new.exists():
+                    os.replace(old, new)
+                    log.info("renamed %s -> %s", old.relative_to(CONTENT), new.relative_to(CONTENT))
         marker = CONTENT / ".seeded"
         if not marker.exists():
             if not any(PAGES.glob("*.md")):
@@ -692,6 +789,8 @@ def css_vars(cfg):
     grid = f"repeat({n}, minmax(0, 1fr))" if n > 0 else f"repeat(auto-fit, minmax({L['column_min_width']}, 1fr))"
     v = {
         "grid-cols": grid,
+        # flex basis of a column: [layout] column_min_width, or 1/n of the width with columns_fixed = n
+        "col-basis": f"calc((100% - {n - 1} * var(--gap)) / {n} - 1px)" if n > 0 else L["column_min_width"],
         "page-max": L["page_max_width"],
         "pad": L["padding"],
         "gap": L["gap"],
@@ -706,7 +805,86 @@ def css_vars(cfg):
         "block-title-transform": F["block_title_transform"],
         "code-ws": "pre-wrap" if cfg["code"]["wrap"] else "pre",
     }
-    return ":root{" + "".join(f"--{k}:{css_safe(val)};" for k, val in v.items()) + "}"
+    return ":root{" + "".join(f"--{k}:{css_safe(val)};" for k, val in v.items()) + "}" + style_css(cfg)
+
+
+# [style.<element>]: base selector + properties that differ from the generic mapping below
+_DONE = "main li.task-list-item:has(> input:checked)"
+_CALLOUT = "main :is(.callout, .admonition, details)"
+_CTITLE = "main :is(.callout-title, .admonition-title, details > summary)"
+_CELLS = "main :is(th, td)"
+STYLE_MAP = {
+    "text": ("main p", {}),
+    "h2": (".block > h2", {"border": ("border-bottom", None)}),
+    "h3": ("main h3", {}), "h4": ("main h4", {}), "h5": ("main h5", {}), "h6": ("main h6", {}),
+    "bold": ("main :is(strong, b)", {}),
+    "italic": ("main :is(em, i)", {}),
+    "strike": ("main :is(del, s)", {}),
+    "highlight": ("main mark", {}),
+    "link": ("main a", {"hover_color": ("color", "main a:hover"),
+                        "hover_decoration": ("text-decoration", "main a:hover")}),
+    "code": ("main :not(pre) > code:not(.highlight)", {}),
+    "code_block": ("main .highlight", {"size": ("font-size", "main .highlight pre"),
+                                       "line_height": ("line-height", "main .highlight pre"),
+                                       "padding": ("padding", "main .highlight pre")}),
+    "quote": ("main blockquote", {"border": ("border-left", None)}),
+    "list": ("main :is(ul, ol)", {"indent": ("padding-left", None),
+                                  "space_before": ("margin-top", "main :not(li) > :is(ul, ol)"),     # not nested lists
+                                  "space_after": ("margin-bottom", "main :not(li) > :is(ul, ol)"),
+                                  "marker": ("content", "main ul > li:not(.task-list-item)::marker"),
+                                  "marker_color": ("color", "main li::marker"),
+                                  "item_gap": ("margin-bottom", "main li")}),
+    "task": ("main li.task-list-item", {"checkbox_color": ("accent-color", "main li.task-list-item > input"),
+                                        "done_color": ("color", _DONE),
+                                        "done_decoration": ("text-decoration", _DONE)}),
+    "callout": (_CALLOUT, {"border_width": ("border-left-width", None),
+                           "bg_opacity": ("background", None),
+                           "title_weight": ("font-weight", _CTITLE),
+                           "title_size": ("font-size", _CTITLE)}),
+    "kbd": ("main kbd", {}),
+    "tip": ("main .tip", {"hover_color": ("color", "main .tip:is(:hover, :focus)")}),
+    "table": ("main table", {"cell_padding": ("padding", _CELLS), "border": ("border", _CELLS),
+                             "header_color": ("color", "main th"), "header_bg": ("background", "main th"),
+                             "stripes": ("background", "main tbody tr:nth-child(even)")}),
+    **{f"bracket_{k}": (f"main .br-{k}", {}) for k in ("round", "square", "curly", "angle")},
+}
+STYLE_PROPS = {
+    "color": "color", "bg": "background", "size": "font-size", "weight": "font-weight", "style": "font-style",
+    "transform": "text-transform", "letter_spacing": "letter-spacing", "line_height": "line-height",
+    "space_before": "margin-top", "space_after": "margin-bottom", "indent": "margin-left",
+    "padding": "padding", "radius": "border-radius", "border": "border", "decoration": "text-decoration",
+}
+_COLOR_PROPS = {"color", "background", "accent-color"}
+
+
+def style_value(prop, key, v):
+    """A [style] value as CSS: theme colour names become var(--name)."""
+    v = css_safe(v).strip()
+    if prop in _COLOR_PROPS and v.replace("-", "_") in DEFAULTS["colors"]:
+        return f"var(--{v.replace('_', '-')})"
+    if key == "marker":
+        return "none" if v == "none" else f'"{v}"'
+    if key == "bg_opacity":
+        return f"color-mix(in srgb, var(--c) {float(v) if re.fullmatch(r'[0-9.]+', v) else 10:g}%, transparent)"
+    return v
+
+
+def style_css(cfg):
+    """CSS rules from [style.*]; empty values keep the built-in look."""
+    rules = {}
+    for el, conf in cfg.get("style", {}).items():
+        if el not in STYLE_MAP or not isinstance(conf, dict):
+            continue
+        base, special = STYLE_MAP[el]
+        for key, v in conf.items():
+            if v in ("", None) or isinstance(v, (dict, list)):
+                continue
+            prop, sel = special.get(key) or (STYLE_PROPS.get(key), None)
+            if not prop:
+                log.warning("[style.%s] unknown key %r", el, key)
+                continue
+            rules.setdefault(sel or base, []).append(f"{prop}:{style_value(prop, key, v)}")
+    return "".join(f"{sel}{{{';'.join(d)}}}" for sel, d in rules.items())
 
 
 def pygments_css(style, prefix=".highlight"):
@@ -785,13 +963,23 @@ THEME_JS = """<script nonce="__NONCE__">
 (() => {
   const T = __T__;
   const root = document.documentElement;
-  const sync = () => document.querySelectorAll('.swatch[data-theme-set]').forEach((b) => {
-    b.classList.toggle('active', b.dataset.themeSet === root.dataset.theme);
-  });
+  const sync = () => {
+    document.querySelectorAll('.swatch[data-theme-set]').forEach((b) => {
+      b.classList.toggle('active', b.dataset.themeSet === root.dataset.theme);
+    });
+    document.querySelectorAll('select[data-theme-pick]').forEach((s) => { s.value = root.dataset.theme; });
+  };
   document.addEventListener('click', (e) => {
     const b = e.target.closest('.swatch[data-theme-set]');
-    if (!b) return;
-    const t = b.dataset.themeSet, prev = root.dataset.theme;
+    if (b) setTheme(b.dataset.themeSet);
+  });
+  document.addEventListener('change', (e) => {
+    const s = e.target.closest('select[data-theme-pick], select[data-lang-pick]');
+    if (!s) return;
+    if (s.dataset.themePick !== undefined) setTheme(s.value); else setLang(s.value);
+  });
+  function setTheme(t) {
+    const prev = root.dataset.theme;
     root.dataset.theme = t;
     sync();
     if (T.readonly) {  // read-only: the choice lives only in this browser (cookie read by the server)
@@ -806,22 +994,25 @@ THEME_JS = """<script nonce="__NONCE__">
       root.dataset.theme = prev; sync();
       alert(T.theme_not_saved + (j.error || r.status));
     });
-  });
-  // language buttons ({{lang}}): saved to config.toml ([page] lang), then the page reloads
-  document.addEventListener('click', async (e) => {
+  }
+  // language ({{lang}} buttons, top-bar drop-down): saved to config.toml ([page] lang), then reload
+  document.addEventListener('click', (e) => {
     const b = e.target.closest('.lang-btn[data-lang-set]');
-    if (!b) return;
+    if (b) setLang(b.dataset.langSet);
+  });
+  async function setLang(lang) {
     if (T.readonly) {  // read-only: the choice lives only in this browser
-      document.cookie = 'h6082_lang=' + encodeURIComponent(b.dataset.langSet) + '; path=/; max-age=31536000; SameSite=Lax';
+      document.cookie = 'h6082_lang=' + encodeURIComponent(lang) + '; path=/; max-age=31536000; SameSite=Lax';
       location.reload();
       return;
     }
     const r = await fetch('/api/lang', {method: 'POST', headers: {'X-H6082': '1', 'Content-Type': 'application/json'},
-      body: JSON.stringify({lang: b.dataset.langSet})});
+      body: JSON.stringify({lang})});
     if (r.ok) { location.reload(); return; }
     const j = await r.json().catch(() => ({}));
     alert(T.lang_not_saved + (j.error || r.status));
-  });
+    document.querySelectorAll('select[data-lang-pick]').forEach((s) => { s.value = document.documentElement.lang; });
+  }
   sync();
   window.h6082Theme = {sync};
 })();
@@ -852,9 +1043,12 @@ def default_tab(cfg, tabs):
     return stems[0] if stems else None
 
 
+SYSTEM_LABELS = {"docs": {"en": "documentation", "cs": "dokumentace"}}   # unless [tabs] labels says otherwise
+
+
 def tab_label(cfg, name):
     """Tab label: a plain string, or a per-language table { en = "…", cs = "…" }."""
-    label = cfg["tabs"]["labels"].get(name, name)
+    label = cfg["tabs"]["labels"].get(name) or SYSTEM_LABELS.get(name, {}).get(cur_lang(cfg)) or name
     if isinstance(label, dict):
         label = label.get(cur_lang(cfg)) or label.get("en") or next(iter(label.values()), name)
     return str(label)
@@ -878,16 +1072,69 @@ def iter_lines_with_fence(text):
         yield line, fence is None
 
 
-def split_columns(text):
-    """Splits text on `# …` lines (outside code blocks). Text before the first `#` = first column."""
-    cols = [[]]
-    for line, outside in iter_lines_with_fence(text):
-        if outside and COLUMN_RE.match(line):
-            cols.append([])
+def split_columns(text, line_breaks=True):
+    """Splits text on `#` lines (outside code blocks) into [(kind, text)]: kind "" / "+" / "++"
+    is a column of normal / 1.5x / 2x width, "-" / "--" of 0.5x / 0.25x, "__" a full-width row. Text before the first `#` =
+    first column. Lines starting with `//` are notes in the source and are dropped; a line of
+    only slashes (`/`, `//`, …) is that many empty lines."""
+    cols = [("", [])]
+    lines = list(iter_lines_with_fence(text))
+    in_block = False
+    n_edit = 0
+
+    def next_is_block(i):
+        for line, outside in lines[i + 1:]:
+            if not outside:
+                return False
+            if line.strip() and not SPACER_RE.match(line):
+                return bool(BLOCK_RE.match(line) or COLUMN_RE.match(line))
+        return True
+
+    for i, (line, outside) in enumerate(lines):
+        if outside and (m := COLUMN_RE.match(line)):
+            cols.append((m.group(1) or "", []))
+            in_block = False
             continue
-        cols[-1].append(line)
-    texts = ["\n".join(c) for c in cols]
-    return [t for i, t in enumerate(texts) if i > 0 or t.strip()]
+        if outside and BLOCK_RE.match(line):
+            in_block = True
+            if em := EDIT_BLOCK_RE.match(line):
+                cols[-1][1].append(f"## {em.group(1)} <!--h6082-edit:{n_edit}-->")
+                n_edit += 1
+                continue
+        if outside and (sp := SPACER_RE.match(line)) and (not in_block or next_is_block(i)):
+            # outside a block: an empty gap in the column instead of a framed block
+            cols[-1][1].extend(["", f"<!--h6082-gap:{min(len(sp.group(1)), 20)}-->", ""])
+            continue
+        if outside and (sp := SPACER_RE.match(line)):
+            n = min(len(sp.group(1)), 20)
+            # with line_breaks the line break before it comes from Enter, otherwise from <br>
+            cols[-1][1].extend((["&nbsp;  "] if line_breaks else ["<br>&nbsp;  "]) + ["&nbsp;  "] * (n - 1))
+            continue
+        if outside and COMMENT_RE.match(line):
+            continue
+        cols[-1][1].append(line)
+    out = [(k, "\n".join(c)) for k, c in cols]
+    return [(k, t) for i, (k, t) in enumerate(out) if i > 0 or t.strip()]
+
+
+COL_CLASS = {"": "col", "+": "col w15", "++": "col w2", "-": "col w05", "--": "col w025"}
+
+
+def layout_html(md, parts):
+    """Columns side by side (.cols, wrapping), a `#__` part as a full-width row between them."""
+    out, row = [], []
+    for kind, text in parts:
+        inner = blocks(render_md(md, text))
+        if kind == "__":
+            if row:
+                out.append(f'<div class="cols">{"".join(row)}</div>')
+                row = []
+            out.append(f'<div class="wide">{inner}</div>')
+        else:
+            row.append(f'<div class="{COL_CLASS[kind]}">{inner}</div>')
+    if row:
+        out.append(f'<div class="cols">{"".join(row)}</div>')
+    return "".join(out)
 
 
 def is_system(cfg, stem):
@@ -895,64 +1142,43 @@ def is_system(cfg, stem):
 
 
 def files_markdown(cfg, which="all"):
-    """Shortcode {{files [system|user]}}: compact rows "name · state  [view ↗] [edit]…".
-    Rename, delete and reset-to-default live in the editor's bar."""
+    """Shortcode {{files [system|user]}}: clean rows "name  [view ↗] [edit]". The editor opens the
+    file in the current language; other language versions, rename and delete are in its bar.
+    The system list: documentation, configuration, markdown showcase."""
     ed = cfg["editor"]["enabled"]
-    tabs, about, hidden = list_tabs(cfg), cfg["page"]["about_tab"], set(cfg["tabs"]["hidden"])
 
-    def state(name):
-        return (t(cfg, "st_tab") if name in tabs else t(cfg, "st_right") if name == about
-                else t(cfg, "st_hidden") if name in hidden else "")
+    def btn(href, label):
+        return f'<a class="tab" href="{href}">{html.escape(label)}</a>'
 
-    def btn(href, label, title=""):
-        tt = f' title="{html.escape(title)}"' if title else ""
-        return f'<a class="tab" href="{href}"{tt}>{html.escape(label)}</a>'
-
-    def edit_btns(paths):
-        if not ed:
-            return []
-        out = []
-        for p in paths:
-            m = LANG_SUFFIX_RE.match(p.stem) if p.parent == PAGES else None
-            label = t(cfg, "f_edit_lang", lang=m.group(2)) if m else t(cfg, "f_edit")
-            out.append(btn(f"/edit/{quote(file_id(p))}", label, file_id(p)))
-        return out
-
-    def row(name, notes, btns):
-        note = " · ".join(html.escape(n) for n in notes if n)
-        note = f" <small>{note}</small>" if note else ""
-        return (f'<div class="file-row"><span class="file-name">{html.escape(name)}{note}</span>'
+    def row(name, btns, desc=""):
+        d = f'<small class="file-desc">{html.escape(desc)}</small>' if desc else ""
+        return (f'<div class="file-row"><span class="file-name">{html.escape(name)}{d}</span>'
                 f'<span class="file-btns">{"".join(btns)}</span></div>')
 
-    def label_note(name):
-        lab = tab_label(cfg, name)
-        return lab if lab != name else ""
-
-    rows = []
+    rows, sysrows = [], []
     if which in ("all", "user"):
         for name in all_stems():
             if is_system(cfg, name):
                 continue
-            rows.append(row(name, [label_note(name), state(name)],
-                            [btn(f"/{quote(name)}", t(cfg, "f_view"))] + edit_btns(page_variants(name))))
+            src = page_path(cfg, name)
+            edit = [btn(f"/edit/{quote(file_id(src))}", t(cfg, "f_edit"))] if ed and src else []
+            rows.append(row(name, [btn(f"/{quote(name)}", t(cfg, "f_view"))] + edit))
     if which in ("all", "system"):
-        for name in sorted(SYSTEM_PAGES):
-            p = page_path(cfg, name)
-            if p:
-                custom = t(cfg, "st_custom") if p.parent.parent == SYSTEM else ""
-                rows.append(row(name, [label_note(name), state(name), custom],
-                                [btn(f"/{quote(name)}", t(cfg, "f_view"))] + edit_btns([p])))
-        rows.append(row("config.toml", [t(cfg, "st_config")],
-                        [btn("/edit/config.toml", t(cfg, "f_edit"))] if ed else []))
-    if not rows:
+        sysrows.append(row("markdown", [btn("/markdown", t(cfg, "f_showcase"))], t(cfg, "f_markdown_desc")))
+        sysrows.append(row(t(cfg, "f_docs"), [btn("/docs", t(cfg, "f_view"))], t(cfg, "f_docs_desc")))
+        sysrows.append(row(t(cfg, "f_config"), [btn("/edit/config.toml", t(cfg, "f_edit"))] if ed else [],
+                           t(cfg, "f_config_desc")))
+    if not rows and not sysrows:
         return ["", f"<small>{t(cfg, 'no_files')}</small>", ""]
-    return ["", f'<div class="files">{"".join(rows)}</div>', ""]
+    out = f'<div class="files">{"".join(rows)}</div>' if rows else ""
+    out += f'<div class="files files-system">{"".join(sysrows)}</div>' if sysrows else ""
+    return ["", out, ""]
 
 
 def newfile_html(cfg):
     return (f'<form class="newfile"><input name="n" placeholder="{t(cfg, "newfile_placeholder")}" autocomplete="off" '
             'pattern="[A-Za-z0-9][A-Za-z0-9_.\\-]*" required><span>.md</span>'
-            f'<button type="submit">{t(cfg, "newfile_button")}</button></form>')
+            f'<button type="submit" title="{html.escape(t(cfg, "newfile_title"))}">{t(cfg, "newfile_button")}</button></form>')
 
 
 def lang_buttons(cfg):
@@ -1002,14 +1228,31 @@ def email_html(m, cfg):
     return f'<a class="email" href="#" data-e="{enc}">{t(cfg, "email_nojs")}</a>'
 
 
+TIP_RE = re.compile(r"\[\?\]\(\??([^()\n]+)\)|\[([^\[\]\n]{1,4})\]\(\?([^()\n]+)\)")
+NOT_TIP_RE = re.compile(r"^(https?:|mailto:|/|#|\.)", re.I)
+
+
+def tip_html(m):
+    """[?](text) -> ⓘ with a hover / focus hint; [★](?text) -> the same with an own icon."""
+    text, icon = (m.group(1), "ⓘ") if m.group(1) is not None else (m.group(3), m.group(2))
+    if m.group(1) is not None and NOT_TIP_RE.match(text.strip()):
+        return m.group(0)          # [?](https://…) stays a link
+    tip = html.escape(text.strip()).replace("\\n", "&#10;")
+    return f'<span class="tip" tabindex="0" role="note" aria-label="{tip}" data-tip="{tip}">{html.escape(icon)}</span>'
+
+
+def _inline(part, cfg):
+    return TIP_RE.sub(tip_html, EMAIL_RE.sub(lambda e: email_html(e, cfg), part))
+
+
 def inline_shortcodes(line, cfg):
-    """Inline shortcodes ({{email …}}) outside `inline code`."""
+    """Inline shortcodes ({{email …}}, [?](hint)) outside `inline code`."""
     out, pos = [], 0
     for m in INLINE_CODE_RE.finditer(line):
-        out.append(EMAIL_RE.sub(lambda e: email_html(e, cfg), line[pos:m.start()]))
+        out.append(_inline(line[pos:m.start()], cfg))
         out.append(m.group(0))
         pos = m.end()
-    out.append(EMAIL_RE.sub(lambda e: email_html(e, cfg), line[pos:]))
+    out.append(_inline(line[pos:], cfg))
     return "".join(out)
 
 
@@ -1180,6 +1423,21 @@ def separate_blocks(text):
     return "\n".join(out)
 
 
+LOCAL_SUFFIXES = (".local", ".lan", ".home", ".internal", ".localhost")
+
+
+def local_host(url):
+    """True for addresses in the local network: private / loopback IPs, localhost, *.local, *.lan …"""
+    host = (urlsplit(url).hostname or "").lower()
+    if host == "localhost" or host.endswith(LOCAL_SUFFIXES):
+        return True
+    try:
+        ip = ipaddress.ip_address(host)
+        return ip.is_private or ip.is_loopback or ip.is_link_local
+    except ValueError:
+        return False
+
+
 class _LinkTidy(Treeprocessor):
     """Bare URLs show without the scheme and trailing slash (https://a.cz/b/ -> a.cz/b);
     links to http:// get class="insecure" (a warning mark in CSS) and a title."""
@@ -1196,7 +1454,7 @@ class _LinkTidy(Treeprocessor):
             if len(a) == 0 and a.text and a.text.strip() == href:
                 short = href.split("://", 1)[1]
                 a.text = markdown.util.AtomicString(short[:-1] if short.endswith("/") else short)
-            if low.startswith("http://"):
+            if low.startswith("http://") and not local_host(href):   # LAN devices: http is normal there
                 a.set("class", (a.get("class", "") + " insecure").strip())
                 a.set("title", a.get("title") or self.title)
 
@@ -1210,7 +1468,74 @@ class _LinkTidyExt(Extension):
         md.treeprocessors.register(_LinkTidy(md, self.title), "h6082_links", 1)
 
 
+BRACKETS = {"round": "()", "square": "[]", "curly": "{}", "angle": "«»"}
+
+
+class _Brackets(Treeprocessor):
+    """Text in brackets inside paragraphs -> <span class="br-round">(…)</span> (only the styled
+    types). Code, keys and raw HTML are left alone; brackets do not span inline elements."""
+    SKIP = {"code", "pre", "kbd", "samp", "script", "style"}
+
+    def __init__(self, md, kinds):
+        super().__init__(md)
+        self.re = re.compile("|".join(
+            f"(?P<{k}>{re.escape(BRACKETS[k][0])}[^{re.escape(BRACKETS[k])}\n\x02\x03]+{re.escape(BRACKETS[k][1])})"
+            for k in kinds))
+
+    def _split(self, text):
+        spans, lead, last = [], None, 0
+        for m in self.re.finditer(text):
+            chunk = text[last:m.start()]
+            if spans:
+                spans[-1].tail = chunk
+            else:
+                lead = chunk
+            sp = etree.Element("span", {"class": f"br-{m.lastgroup}"})
+            sp.text = markdown.util.AtomicString(m.group(0))
+            spans.append(sp)
+            last = m.end()
+        if spans:
+            spans[-1].tail = text[last:]
+        return lead, spans
+
+    def _walk(self, el):
+        if el.tag in self.SKIP:
+            return
+        if el.text:
+            lead, spans = self._split(el.text)
+            if spans:
+                el.text = lead
+                for i, sp in enumerate(spans):
+                    el.insert(i, sp)
+        for ch in list(el):
+            if ch.tag == "span" and (ch.get("class") or "").startswith("br-"):
+                continue
+            self._walk(ch)
+            if ch.tail:
+                lead, spans = self._split(ch.tail)
+                if spans:
+                    ch.tail = lead
+                    at = list(el).index(ch) + 1
+                    for i, sp in enumerate(spans):
+                        el.insert(at + i, sp)
+
+    def run(self, root):
+        self._walk(root)
+
+
+class _BracketsExt(Extension):
+    def __init__(self, kinds):
+        super().__init__()
+        self.kinds = kinds
+
+    def extendMarkdown(self, md):
+        md.treeprocessors.register(_Brackets(md, self.kinds), "h6082_brackets", 0.5)
+
+
 def make_md(cfg):
+    st = cfg.get("style", {})
+    kinds = [k for k in BRACKETS if any(v not in ("", None) for v in st.get(f"bracket_{k}", {}).values())]
+    extra = ([_BracketsExt(kinds)] if kinds else []) + (["nl2br"] if cfg["markdown"]["line_breaks"] else [])
     return markdown.Markdown(
         extensions=[
             _LinkTidyExt(t(cfg, "insecure_link")),
@@ -1226,6 +1551,7 @@ def make_md(cfg):
             "pymdownx.mark",
             "pymdownx.keys",
             "pymdownx.tasklist",
+            *extra,
         ],
         extension_configs={
             "footnotes": {"UNIQUE_IDS": True},
@@ -1266,13 +1592,44 @@ def _subsections(htm):
 
 
 def blocks(htm):
-    """Each `##` (and content before the first `##`) -> a separate framed block."""
+    """Each `##` (and content before the first `##`) -> a separate framed block;
+    a column-level `/` line -> an empty gap of that many lines."""
+    parts = GAP_RE.split(htm)
+    if len(parts) > 1:
+        return "".join(blocks(p) if i % 2 == 0 else
+                       f'<div class="col-gap" style="height:calc({int(p)} * var(--line-height) * 1em - var(--block-gap))"></div>'
+                       for i, p in enumerate(parts))
     out = []
     for head, body in _split_heading(htm, 2):
         inner = _subsections(body)
         body_html = f'<div class="block-body">{inner}</div>' if inner.strip() else ""
-        out.append(f'<section class="block">{head or ""}{body_html}</section>')
+        edit = EDIT_MARK_RE.search(head or "")
+        if edit:
+            head = EDIT_MARK_RE.sub("", head)
+        title = re.sub(r"<[^>]+>", "", head or "").strip()
+        sid = f' id="{"cfg-" if title.startswith("[") else ""}{slug(title)}"' if head else ""
+        cls = "block" if body_html or not head else "block title-only"   # `## Title` alone = a column heading
+        if not head and IMAGE_ONLY_RE.match(inner):                        # just an image: a banner, no frame
+            cls = "block image-only"
+        if head and (fm := H2_CLASS_RE.search(head)) and "fill" in fm.group(1).split():   # ## Title {.fill}
+            rest = " ".join(c for c in fm.group(1).split() if c != "fill")
+            head = head[:fm.start()] + (f' class="{rest}"' if rest else "") + head[fm.end():]
+            cls += " fill"
+        if edit:   # finished in build_tab: source + ✎ button, or a plain block when not editable
+            out.append(f'<section class="block" data-edit-block="{edit.group(1)}"{sid}>{head or ""}{body_html}</section>')
+            continue
+        out.append(f'<section class="{cls}"{sid}>{head or ""}{body_html}</section>')
     return "".join(out)
+
+
+H2_CLASS_RE = re.compile(r'\sclass="([^"]*)"')
+IMAGE_ONLY_RE = re.compile(r"^\s*<p>\s*(?:<a [^>]*>\s*)?<img [^>]*>\s*(?:</a>\s*)?</p>\s*$")
+
+
+def slug(text):
+    """Block anchor: "Odstavce a zalomení" -> "odstavce-a-zalomeni"."""
+    t = unicodedata.normalize("NFKD", html.unescape(text)).encode("ascii", "ignore").decode().lower()
+    return re.sub(r"[^a-z0-9]+", "-", t).strip("-") or "blok"
 
 
 EXT_LINK_RE = re.compile(r'<a (?![^>]*\btarget=)([^>]*\bhref="https?://)')
@@ -1325,7 +1682,10 @@ def postprocess(htm, cfg):
         htm = mark_checks(htm)
     if cfg["page"]["links_new_tab"]:
         htm = EXT_LINK_RE.sub(r'<a target="_blank" rel="noopener noreferrer" \1', htm)
-    return htm
+    return TRAILING_BR_RE.sub(r"\1", htm)   # Enter before a {: …} line leaves a <br> at the end
+
+
+TRAILING_BR_RE = re.compile(r"<br>\s*(</(?:p|li|td|th|dd)>)")
 
 
 # ------------------------------------------------------------ javascript ----
@@ -1552,7 +1912,7 @@ window.h6082 = (() => {
   });
 
   // ---- tasks: toggle, delete, add
-  const grid = () => document.querySelector('.grid[data-tasks-sig]');
+  const grid = () => document.querySelector('[data-tasks-sig]');
   async function taskOp(body, refresh) {
     const g = grid();
     if (!g) return false;
@@ -1604,8 +1964,95 @@ window.h6082 = (() => {
     }
   }
 
+  // ---- code blocks: a copy button in the top right corner (shown on hover / focus)
+  const COPY_SVG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" ' +
+    'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/>' +
+    '<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+  function copyButtons() {
+    document.querySelectorAll('div.highlight').forEach((box) => {
+      if (box.querySelector(':scope > .copy-btn')) return;
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'copy-btn'; b.title = T.copy; b.setAttribute('aria-label', T.copy);
+      b.innerHTML = COPY_SVG;
+      box.appendChild(b);
+    });
+  }
+  async function copyText(text) {
+    try { await navigator.clipboard.writeText(text); return true; } catch (e) { /* http on a LAN: fallback */ }
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    ta.remove();
+    return ok;
+  }
+  document.addEventListener('click', async (e) => {
+    const b = e.target.closest('.copy-btn');
+    if (!b) return;
+    const box = b.closest('div.highlight');
+    const pre = box.querySelector('td.code pre') || box.querySelector('pre');
+    const ok = await copyText((pre ? pre.innerText : '').replace(/\\n$/, ''));
+    b.classList.add(ok ? 'done' : 'fail');
+    b.title = ok ? T.copied : T.copy_failed;
+    setTimeout(() => { b.classList.remove('done', 'fail'); b.title = T.copy; }, 1500);
+  });
+
+  // ---- ##* blocks: ✎ opens the block's markdown in place, saved through /api/block
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('.block-edit');
+    if (!b) return;
+    const sec = b.closest('section.editable');
+    if (!sec || sec.querySelector('.block-form')) return;
+    const body = sec.querySelector(':scope > .block-body');
+    const orig = sec.dataset.src;
+    const f = document.createElement('form');
+    f.className = 'block-form';
+    f.setAttribute('data-live-hold', '');   // live reload waits while this is open
+    const ta = document.createElement('textarea');
+    ta.className = 'block-src'; ta.value = orig; ta.spellcheck = false;
+    ta.setAttribute('aria-label', T.block_hint);
+    const bar = document.createElement('div');
+    bar.className = 'block-bar';
+    const st = document.createElement('small');
+    st.textContent = T.block_hint;
+    const cancel = document.createElement('button');
+    cancel.type = 'button'; cancel.textContent = T.block_cancel;
+    const save = document.createElement('button');
+    save.type = 'submit'; save.className = 'primary'; save.textContent = T.block_save;
+    bar.append(st, cancel, save);
+    f.append(ta, bar);
+    if (body) { body.hidden = true; body.after(f); } else sec.append(f);
+    sec.classList.add('editing');
+    const grow = () => { ta.style.height = 'auto'; ta.style.height = (ta.scrollHeight + 2) + 'px'; };
+    ta.addEventListener('input', grow);
+    grow();
+    if (typeof window.smartEditor === 'function') window.smartEditor(ta, true);
+    ta.focus();
+    const close = () => { f.remove(); if (body) body.hidden = false; sec.classList.remove('editing'); };
+    cancel.addEventListener('click', close);
+    ta.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Escape') { ev.preventDefault(); close(); }
+      else if ((ev.ctrlKey || ev.metaKey) && (ev.key === 'Enter' || ev.key === 's')) { ev.preventDefault(); f.requestSubmit(); }
+    });
+    f.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const g = document.querySelector('[data-tasks-sig]');
+      st.textContent = T.block_saving; save.disabled = true;
+      const r = await api('/api/block', {method: 'POST', body: JSON.stringify({
+        file: g.dataset.file, i: Number(sec.dataset.editBlock), orig, text: ta.value})});
+      if (!r.ok) {
+        save.disabled = false; st.textContent = T.block_hint;
+        alert(r.j.error || r.status);
+        if (r.status !== 409) return;
+      }
+      f.removeAttribute('data-live-hold');
+      (window.h6082Live?.refresh || (() => location.reload()))();
+    });
+  });
+
   function init() {
-    emails(); checks(); rss(); sys(); hist(); tasksUi();
+    emails(); checks(); rss(); sys(); hist(); tasksUi(); copyButtons();
     document.querySelectorAll('textarea.note-area').forEach(grow);
   }
   if (CHECK_S > 0) setInterval(checks, CHECK_S * 1000);
@@ -1862,6 +2309,102 @@ function smartEditor(ta, MD) {
   });
 }
 
+// Syntax colouring under the textarea: a <pre> with the same text and metrics, the textarea on
+// top has transparent text (caret and selection stay native). Colours only, no bold / italic,
+// so the layer never shifts even with a proportional font.
+function highlighter(ta, pre, mode) {
+  if (!pre) return () => {};
+  if (!mode) { pre.remove(); ta.classList.add('plain'); return () => {}; }
+  const esc = (t) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const span = (cls, t) => '<span class="' + cls + '">' + esc(t) + '</span>';
+  const INLINE = new RegExp([
+    '(`+)[^`\\n]*?\\2',                                  // 1 code (\\2: its own backticks)
+    '\\+\\+[^\\s+][^\\s]*?\\+\\+',                       // keys ++ctrl+b++
+    '\\[[^\\]\\n]{1,4}\\]\\(\\?[^)\\n]*\\)|\\[\\?\\]\\([^)\\n]*\\)',  // [?](hint) / [★](?hint)
+    '!?\\[[^\\]\\n]*\\]\\([^)\\n]*\\)',                  // link / image
+    '\\{\\{[^}\\n]*\\}\\}',                              // {{shortcode}}
+    '\\*\\*[^*\\n]+?\\*\\*|__[^_\\n]+?__',               // bold
+    '~~[^~\\n]+?~~',                                     // strike
+    '==[^=\\n]+?==',                                     // highlight
+    '\\*[^*\\s][^*\\n]*?\\*|\\b_[^_\\s][^_\\n]*?_\\b',   // italic
+    'https?://[^\\s)<>\\]]+',                            // bare URL
+    '</?[a-zA-Z][^>\\n]*>|<!--.*?-->',                   // HTML
+    '\\{[:.#][^}\\n]*\\}',                               // {: attributes}
+  ].map((r) => '(' + r + ')').join('|'), 'g');
+  const KIND = [null, 'h-code', null, 'h-kbd', 'h-tip', 'h-link', 'h-sc', 'h-b', 'h-s', 'h-mark', 'h-i', 'h-url', 'h-html', 'h-attr'];
+
+  function inline(t) {
+    let out = '', last = 0;
+    for (const m of t.matchAll(INLINE)) {
+      const k = KIND.findIndex((_, i) => i && i !== 2 && m[i] !== undefined);
+      out += esc(t.slice(last, m.index));
+      if (KIND[k] === 'h-link') {
+        const cut = m[0].indexOf('](') + 1;
+        out += span('h-link', m[0].slice(0, cut)) + span('h-url', m[0].slice(cut));
+      } else out += span(KIND[k], m[0]);
+      last = m.index + m[0].length;
+    }
+    return out + esc(t.slice(last));
+  }
+
+  function mdLine(l, st) {
+    const f = /^\s*(`{3,}|~{3,})/.exec(l);
+    if (st.fence) {
+      if (f && f[1][0] === st.fence[0] && f[1].length >= st.fence.length) st.fence = null;
+      return span(st.fence ? 'h-code' : 'h-fence', l);
+    }
+    if (f) { st.fence = f[1]; return span('h-fence', l); }
+    let m;
+    if (/^#(\+\+|\+|--|-|__)?(\s.*)?$/.test(l)) return span('h-col', l);
+    if (/^##(\*|\s|$)/.test(l)) return span('h-h2', l);
+    if ((m = /^(#{3,6})(\s.*)$/.exec(l))) return span('h-h3', l);
+    if (/^ {0,3}\/+\s*$/.test(l)) return span('h-gap', l);
+    if (/^ {0,3}\/\//.test(l)) return span('h-comment', l);
+    if (/^\s*\{\{.*\}\}\s*$/.test(l)) return span('h-sc', l);
+    if (/^ {0,3}([-*_])(\s*\1){2,}\s*$/.test(l)) return span('h-hr', l);
+    if (/^\*\[[^\]]+\]:/.test(l)) return span('h-attr', l);
+    if ((m = /^(\s*(?:>\s?)+)(\[![^\]]*\][+-]?)?(.*)$/.exec(l)))
+      return span('h-quote', m[1]) + (m[2] ? span('h-callout', m[2]) : '') + inline(m[3]);
+    if ((m = /^(\s*(?:[-*+]|\d{1,9}[.)])\s+)(\[[ xX]\]\s)?(.*)$/.exec(l)))
+      return span('h-li', m[1]) + (m[2] ? span('h-task', m[2]) : '') + inline(m[3]);
+    if ((m = /^(\s*)(!!!|\?\?\?\+?)(.*)$/.exec(l))) return esc(m[1]) + span('h-callout', m[2] + m[3]);
+    if (/^\s*\|/.test(l)) return inline(l).replace(/\|/g, '<span class="h-punct">|</span>');
+    if (/^:\s/.test(l)) return span('h-li', ':') + inline(l.slice(1));
+    return inline(l);
+  }
+
+  function tomlLine(l) {
+    let m;
+    if ((m = /^(\s*\[\[?[^\]]*\]\]?)(.*)$/.exec(l))) return span('h-h2', m[1]) + tomlRest(m[2]);
+    if ((m = /^(\s*)([\w.\-"']+)(\s*=)(.*)$/.exec(l))) return esc(m[1]) + span('h-key', m[2]) + esc(m[3]) + tomlRest(m[4]);
+    return tomlRest(l);
+  }
+  function tomlRest(t) {
+    let out = '', i = 0;
+    const re = /("(?:\\.|[^"\\])*"|'[^']*')|(#.*$)|\b(true|false|-?\d[\d_.:eE+-]*)\b/g;
+    for (const m of t.matchAll(re)) {
+      out += esc(t.slice(i, m.index));
+      out += span(m[1] ? 'h-str' : m[2] ? 'h-comment' : 'h-num', m[0]);
+      i = m.index + m[0].length;
+    }
+    return out + esc(t.slice(i));
+  }
+
+  let queued = false;
+  function paint() {
+    queued = false;
+    const st = {fence: null};
+    const html = ta.value.split('\n').map((l) => mode === 'md' ? mdLine(l, st) : tomlLine(l)).join('\n');
+    pre.innerHTML = html + '\n ';   // the extra line keeps the height equal after a final newline
+    sync();
+  }
+  function sync() { pre.scrollTop = ta.scrollTop; pre.scrollLeft = ta.scrollLeft; }
+  ta.addEventListener('input', () => { if (!queued) { queued = true; requestAnimationFrame(paint); } });
+  ta.addEventListener('scroll', sync);
+  new ResizeObserver(sync).observe(ta);
+  return paint;
+}
+
 // Editor layout: draggable divider between the editor and the preview (double-click = half,
 // arrow keys on the focused divider) and the "preview" button / Alt+P. Kept in localStorage.
 function editorPanes() {
@@ -1943,8 +2486,11 @@ __SMART__
       const j = await r.json();
       if (!r.ok) { set(T.err + j.error, 'err'); ta.disabled = true; return; }
       ta.value = saved = j.text; mtime = j.mtime; blocked = false; cf.hidden = true; ta.disabled = false;
+      paint();
       set(j.warning ? '⚠ ' + j.warning : T.loaded, j.warning ? 'warn' : 'ok');
       ta.focus();
+      ta.setSelectionRange(0, 0);   // start at the top of the file
+      ta.scrollTop = 0;
     } catch (e) { set(T.cannot_load + e.message, 'err'); }
   }
 
@@ -1979,6 +2525,7 @@ __SMART__
     if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); save(); }
   });
   smartEditor(ta, /\\.md$/i.test(NAME));
+  const paint = highlighter(ta, document.querySelector('.ed-hl'), /\\.md$/i.test(NAME) ? 'md' : /\\.toml$/i.test(NAME) ? 'toml' : '');
   editorPanes();
   document.getElementById('reload').onclick = () => { if (!dirty() || confirm(T.confirm_discard)) load(); };
   document.getElementById('force').onclick = () => { if (confirm(T.confirm_overwrite)) save(true); };
@@ -1994,6 +2541,19 @@ __SMART__
     return {ok: r.ok, status: r.status, j: await r.json().catch(() => ({}))};
   };
   const ren = document.getElementById('ren'), del = document.getElementById('del'), rst = document.getElementById('reset');
+  document.querySelectorAll('.ed-langs a').forEach((a) => a.addEventListener('click', async (e) => {
+    e.preventDefault();
+    if (!await flush()) { set(T.rename_unsaved, 'err'); return; }
+    gone = true;
+    location.href = a.href;
+  }));
+  document.querySelectorAll('.ed-langs [data-new]').forEach((b) => b.addEventListener('click', async () => {
+    if (!await flush()) { set(T.rename_unsaved, 'err'); return; }
+    const r = await post('POST', '/api/new', JSON.stringify({name: b.dataset.new}));
+    if (!r.ok) { alert(r.j.error || r.status); return; }
+    gone = true;
+    location.href = '/edit/' + encodeURIComponent(r.j.name);
+  }));
   if (ren) ren.onclick = async () => {
     const cur = NAME.replace(/\\.md$/, '');
     const to = (prompt(T.rename_prompt, cur) || '').trim().replace(/\\.md$/, '');
@@ -2031,9 +2591,19 @@ __SMART__
 
 # ------------------------------------------------------------------ html ----
 
+# the default browser-tab icon: a purple diamond (rounded square turned 45°, light-to-dark gradient)
+FAVICON_SVG = ("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'><defs>"
+               "<linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>"
+               "<stop offset='0' stop-color='#c39bff'/><stop offset='1' stop-color='#8a4fe8'/></linearGradient></defs>"
+               "<rect x='7.2' y='7.2' width='21.6' height='21.6' rx='2.6' transform='rotate(45 18 18)' fill='url(#g)'/></svg>")
+
+
 def favicon(cfg):
-    fav = html.escape(str(cfg["page"]["favicon"]))
-    svg = f"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>{fav}</text></svg>"
+    """[page] favicon: "" = the built-in diamond, otherwise a character / emoji drawn as SVG text."""
+    fav = str(cfg["page"]["favicon"]).strip()
+    if not fav:
+        return "data:image/svg+xml," + quote(FAVICON_SVG)
+    svg = f"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>{html.escape(fav)}</text></svg>"
     return "data:image/svg+xml," + quote(svg)
 
 
@@ -2061,6 +2631,23 @@ def page(cfg, title, body, scripts="", body_class=""):
 </html>"""
 
 
+# a gear: 8 teeth (a dashed ring) around a ring with a hole; colour = currentColor
+GEAR_SVG = ('<svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" fill="none" stroke="currentColor">'
+            '<circle cx="12" cy="12" r="8.4" stroke-width="3.2" stroke-dasharray="3.3 3.3"/>'
+            '<circle cx="12" cy="12" r="6.2" stroke-width="2.4"/>'
+            '<circle cx="12" cy="12" r="2.2" stroke-width="2"/></svg>')
+
+
+def top_pickers(cfg):
+    """Language and theme drop-downs in the top bar of the about page (h6082)."""
+    cur = cur_lang(cfg)
+    langs = "".join(f'<option value="{x}"{" selected" if x == cur else ""}>{LANG_NAMES[x]}</option>' for x in LANGS)
+    ths = [("auto", "auto")] + [(n, str(th.get("label", n))) for n, th in themes(cfg).items()]
+    opts = "".join(f'<option value="{html.escape(n)}">{html.escape(lab)}</option>' for n, lab in ths)
+    return (f'<select class="pick" data-lang-pick aria-label="{t(cfg, "pick_lang")}" title="{t(cfg, "pick_lang")}">{langs}</select>'
+            f'<select class="pick" data-theme-pick aria-label="{t(cfg, "pick_theme")}" title="{t(cfg, "pick_theme")}">{opts}</select>')
+
+
 def tab_bar(cfg, tabs, active, live=True):
     """Top bar: header | user tabs … current hidden tab | about | live."""
     def link(name, extra=""):
@@ -2079,8 +2666,13 @@ def tab_bar(cfg, tabs, active, live=True):
     about = cfg["page"]["about_tab"]
     if active and active not in tabs and active != about:
         right.append(link(active, " sub"))
+    if about and active == about:
+        right.append(top_pickers(cfg))
     if about and page_path(cfg, about):
-        right.append(link(about, " about"))
+        on = active == about
+        label = html.escape(tab_label(cfg, about))
+        right.append(f'<a class="tab about gear{" active" if on else ""}"{" aria-current=\"page\"" if on else ""} '
+                     f'href="/{quote(about)}" title="{label}" aria-label="{label}">{GEAR_SVG}</a>')
     if live and cfg["page"]["live_reload"]:
         right.append(f'<span class="live" title="{t(cfg, "live_title")}">●</span>')
     if not left and not right:
@@ -2125,6 +2717,54 @@ def source_lines(text):
             yield i, line, "marker"
             continue
         yield i, line, "normal"
+
+
+def edit_block_ranges(text):
+    """[(first, last)] line ranges of the bodies of `##*` blocks (without trailing empty lines),
+    counted outside code blocks and notes, in the same order as split_columns numbers them."""
+    src = list(source_lines(text))
+    heads = [i for i, line, k in src if k == "normal" and EDIT_BLOCK_RE.match(line)]
+    out = []
+    for h in heads:
+        end = len(src)
+        for i, line, k in src[h + 1:]:
+            if k == "normal" and (BLOCK_RE.match(line) or COLUMN_RE.match(line)):
+                end = i
+                break
+        last = end
+        while last > h + 1 and not src[last - 1][1].strip():
+            last -= 1
+        out.append((h + 1, last))
+    return out
+
+
+def edit_block_source(text, i):
+    ranges = edit_block_ranges(text)
+    if not 0 <= i < len(ranges):
+        return None
+    a, b = ranges[i]
+    return "\n".join(text.split("\n")[a:b])
+
+
+EDIT_SECTION_RE = re.compile(r'<section class="block" data-edit-block="(\d+)"([^>]*)>')
+
+
+def finish_edit_blocks(cfg, body, raw, editable):
+    """Editable `##*` blocks get their markdown source and a ✎ button; elsewhere plain blocks."""
+    def sub(m):
+        src = edit_block_source(raw, int(m.group(1))) if editable else None
+        if src is None:
+            return f'<section class="block"{m.group(2)}>'
+        return (f'<section class="block editable" data-edit-block="{m.group(1)}" data-src="{html.escape(src)}"{m.group(2)}>'
+                f'<button type="button" class="block-edit" title="{t(cfg, "block_edit")}" aria-label="{t(cfg, "block_edit")}">'
+                f'{EDIT_SVG}</button>')
+    return EDIT_SECTION_RE.sub(sub, body)
+
+
+# a pencil
+EDIT_SVG = ('<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" '
+            'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+            '<path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>')
 
 
 def task_lines(text):
@@ -2197,13 +2837,14 @@ def build_tab(cfg, tabs, name, embed):
     editable = cfg["editor"]["enabled"] and not is_system(cfg, name) and not embed
     text, notes = extract_notes(cfg, raw, fid, editable)
     text = expand_shortcodes(cfg, text)
-    cols = "".join(f'<div class="col">{blocks(render_md(md, c))}</div>' for c in split_columns(text))
+    cols = layout_html(md, split_columns(text, cfg["markdown"]["line_breaks"]))
     for tok, h in notes.items():
         cols = cols.replace(f"<p>{tok}</p>", h)
     cols = number_tasks(cfg, cols, len(task_lines(raw)), editable)
+    cols = finish_edit_blocks(cfg, cols, raw, editable)
     attrs = f' data-file="{html.escape(fid)}" data-tasks-sig="{tasks_sig(raw)}"' if editable else ""
     bar = "" if embed else tab_bar(cfg, tabs, name)
-    body = f'{bar}<div class="grid"{attrs}>{cols}</div>'
+    body = f'{bar}<div class="rows"{attrs}>{cols}</div>'
     title = cfg["page"]["title"]
     if len(tabs) > 1 or name not in tabs:
         title = f"{tab_label(cfg, name)} · {title}"
@@ -2211,12 +2852,47 @@ def build_tab(cfg, tabs, name, embed):
     sys_s = int(cfg["system"]["interval_s"]) if cfg["system"]["enabled"] else 0
     scripts = (LIVE_JS if cfg["page"]["live_reload"] else "") + \
         PAGE_JS.replace("__CHECK_S__", str(check_s)).replace("__SYS_S__", str(sys_s))
+    if 'class="block editable"' in cols:   # smart typing for the in-place block editor
+        scripts += f'<script nonce="__NONCE__">{SMART_JS}</script>'
+
     return page(cfg, title, postprocess(body, cfg), scripts, "embed" if embed else "")
 
 
 def build_message(cfg, tabs, msg):
     return page(cfg, cfg["page"]["title"], f'{tab_bar(cfg, tabs, None, live=False)}<div class="grid"><div class="col">'
                 f'<section class="block"><div class="block-body"><p>{msg}</p></div></section></div></div>')
+
+
+def editor_langs(cfg, fname, p):
+    """Language versions of the edited file as switch buttons; a missing translation of a user
+    page is offered as "+ cs" (created from the template, then opened)."""
+    if p is None or p == CFG_FILE:
+        return ""
+    items = []
+    if p.parent == PAGES:
+        base = tab_of(fname)
+        for lang, f in [(None, PAGES / f"{base}.md")] + [(x, PAGES / f"{base}.{x}.md") for x in LANGS]:
+            label = lang or t(cfg, "ed_lang_base")
+            if f.name == fname:
+                items.append(f'<span class="tab active" aria-current="page" title="{f.name}">{label}</span>')
+            elif f.is_file():
+                items.append(f'<a class="tab" href="/edit/{quote(f.name)}" title="{f.name}">{label}</a>')
+            elif lang and cfg["editor"]["enabled"]:
+                items.append(f'<button type="button" class="tab sub" data-new="{base}.{lang}" '
+                             f'title="{html.escape(t(cfg, "ed_lang_new_title", f=f.name))}">+ {lang}</button>')
+        if sum(1 for f in page_variants(base)) < 2:   # no translations: no language buttons
+            return ""
+    elif m := SYSTEM_FILE_RE.match(fname):
+        for lang in LANGS:
+            fid = f"system/{lang}/{m.group(2)}.md"
+            q = editable_path(fid)
+            if not (q.is_file() or default_of(q)):
+                continue
+            items.append(f'<span class="tab active" aria-current="page">{lang}</span>' if fid == fname
+                         else f'<a class="tab" href="/edit/{quote(fid)}" title="{fid}">{lang}</a>')
+        if len(items) < 2:
+            return ""
+    return f'<span class="ed-langs">{"".join(items)}</span>' if items else ""
 
 
 def build_editor(cfg, tabs, fname):
@@ -2229,16 +2905,20 @@ def build_editor(cfg, tabs, fname):
     acts = ""
     if p is not None and p.parent == PAGES:
         acts = (f'<button id="ren" type="button" class="tab">{t(cfg, "ed_rename")}</button>'
-                f'<button id="del" type="button" class="tab danger">{t(cfg, "ed_delete")}</button>')
+                f'<button id="del" type="button" class="tab danger" title="{t(cfg, "ed_delete_title")}">{t(cfg, "ed_delete")}</button>')
     elif fname.startswith("system/") and p.is_file() and default_of(p):
         acts = f'<button id="reset" type="button" class="tab danger">{t(cfg, "ed_reset")}</button>'
     acts = f'<span class="ed-acts">{acts}</span>' if acts else ""
+    acts = editor_langs(cfg, fname, p) + acts
     view = (f'<button id="pv" class="tab" type="button" aria-pressed="true" title="{t(cfg, "ed_preview_title")}">'
             f'{t(cfg, "ed_preview")}</button>' if preview else "")
     if stem:
         view += f'<a class="tab" href="/{quote(stem)}?lang={plang}">{t(cfg, "ed_view")}</a>'
     if cfg["history"]["enabled"]:
         view += f'<a class="tab" href="/history/{quote(fname)}">{t(cfg, "ed_history")}</a>'
+    help_href = "/docs#format-configu" if fname == "config.toml" else "/docs#editor"
+    view += (f'<a class="tab" href="{help_href}" target="_blank" title="{t(cfg, "ed_help_title")}">{t(cfg, "ed_help")}</a>'
+             f'<a class="tab" href="/markdown" target="_blank" title="{t(cfg, "ed_md_title")}">markdown ↗</a>')
 
     q = f"?embed=1&lang={plang}" if stem else "?embed=1"
     iframe = (f'<div class="ed-split" role="separator" aria-orientation="vertical" tabindex="0" '
@@ -2254,7 +2934,7 @@ def build_editor(cfg, tabs, fname):
     <span class="ed-right">{view}<a class="tab" href="/{quote(about)}">{t(cfg, "ed_back")}</a></span>
   </div>
   <div class="ed-panes">
-    <textarea id="src" spellcheck="false" autocapitalize="off" autocomplete="off" disabled></textarea>
+    <div class="ed-src"><pre class="ed-hl" aria-hidden="true"></pre><textarea id="src" spellcheck="false" autocapitalize="off" autocomplete="off" disabled></textarea></div>
     {iframe}
   </div>
 </div>"""
@@ -2965,6 +3645,12 @@ class Handler(BaseHTTPRequestHandler):
         path, qs = unquote(u.path), parse_qs(u.query)
         if path == "/healthz":
             return self._send(200, b"ok\n", "text/plain")
+        if path == "/showcase":  # the built-in page was renamed to "markdown"
+            self.send_response(301)
+            self.send_header("Location", "/markdown" + (f"?{u.query}" if u.query else ""))
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         if path == "/events":
             if READONLY:  # nothing ever changes, no long-lived connections for the public
                 return self._send(404, b"404\n", "text/plain")
@@ -3158,6 +3844,34 @@ class Handler(BaseHTTPRequestHandler):
             closing = lines[b:b + 1] or [NOTE_CLOSE]
             lines[a + 1:b + 1] = (new.split("\n") if new else []) + closing
             write_atomic(p, "\n".join(lines))
+        self._json(200, {"ok": True})
+
+    def _api_block(self):
+        """POST /api/block {file, i, orig, text}: replaces the body of the i-th `##*` block."""
+        if not (g := self._write_guard()):
+            return
+        cfg, data = g
+        if not (p := self._user_md(cfg, str(data.get("file", "")))):
+            return
+        i, orig, new = data.get("i"), data.get("orig"), data.get("text")
+        if not isinstance(i, int) or not isinstance(orig, str) or not isinstance(new, str):
+            return self._json(400, {"error": t(cfg, "err_bad_request")})
+        new = new.replace("\r\n", "\n").replace("\r", "\n").rstrip("\n")
+        if any(BLOCK_RE.match(x) or COLUMN_RE.match(x) for x, _ in iter_lines_with_fence(new) if _):
+            return self._json(400, {"error": t(cfg, "err_block_heading")})
+        with _lock:
+            text = p.read_text(encoding="utf-8")
+            ranges = edit_block_ranges(text)
+            if not 0 <= i < len(ranges) or edit_block_source(text, i) != orig:
+                return self._json(409, {"error": t(cfg, "err_block_changed")})
+            a, b = ranges[i]
+            lines = text.split("\n")
+            lines[a:b] = new.split("\n") if new else []
+            out = "\n".join(lines)
+            if len(out.encode()) > int(cfg["editor"]["max_size_kb"]) * 1024:
+                return self._json(413, {"error": t(cfg, "err_too_big")})
+            write_atomic(p, out)
+        log.info("block %d of %s saved", i, p.name)
         self._json(200, {"ok": True})
 
     def _api_tasks(self):
@@ -3450,6 +4164,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._api_lang()
         if path == "/api/note":
             return self._api_note()
+        if path == "/api/block":
+            return self._api_block()
         if path == "/api/tasks":
             return self._api_tasks()
         if path in ("/api/history/restore", "/api/history/purge"):
