@@ -278,7 +278,33 @@ Náhled jiného jazyka bez uložení: `/<jméno>?lang=cs`.
 `max_size_kb` · `1024`
 : max. velikost ukládaného souboru
 
-Ovládání: ++ctrl+s++ uloží hned, ++tab++ vloží 4 mezery. Vpravo je živý náhled. Při konfliktu editor nabídne *načíst ze souboru* nebo *přepsat*.
+Při konfliktu editor nabídne *načíst ze souboru* nebo *přepsat*. Ovládání je v bloku Editor.
+
+## Editor
+Ukládá se samo po chvíli bez psaní, ++ctrl+s++ uloží hned. Vpravo je živý náhled.
+
+- **hranice editor | náhled**: táhni myší; dvojklik ji vrátí doprostřed, na zaměřené hranici fungují ++arrow-left++ ++arrow-right++. Šířka se pamatuje v prohlížeči.
+- **náhled** (tlačítko vedle *zobrazit*) nebo ++alt+p++: skryje / ukáže náhled
+- **párování**: `` ( [ { < " ' ` `` se zavírají samy, napsání zavírací závorky ji jen přeskočí, ++backspace++ smaže prázdný pár
+- **seznamy a citace**: ++enter++ pokračuje v `-`, `1.`, `- [ ]` a `>`; ++enter++ na prázdné položce seznam ukončí. ```` ```jazyk ```` + ++enter++ uzavře blok kódu.
+- **odsazení**: ++tab++ / ++shift+tab++ odsadí položku seznamu nebo všechny vybrané řádky
+- **označený text**: napsání `*` ho obalí kurzívou, další `*` udělá tučné; `_` kurzíva, `~` ~~přeškrtnutí~~, `=` ==zvýraznění==, `` ` `` kód (víc řádků → blok ```` ``` ````). Mezery na okrajích výběru zůstanou vně, u více řádků se obalí každý zvlášť a značky seznamu zůstanou na místě.
+- **vložení URL** přes označený text vytvoří odkaz `[text](url)`
+
+| zkratka | akce |
+|---|---|
+| ++ctrl+b++ | **tučně** |
+| ++ctrl+i++ | *kurzíva* |
+| ++ctrl+e++ | `kód`, u více řádků blok |
+| ++ctrl+k++ | odkaz `[text]()`, z označené URL `[](url)` |
+| ++ctrl+shift+x++ | ~~přeškrtnutí~~ |
+| ++ctrl+shift+h++ | ==zvýraznění== |
+| ++ctrl+shift+8++ | odrážky `- ` |
+| ++ctrl+shift+7++ | číslovaný seznam `1. ` |
+| ++ctrl+shift+9++ | úkoly `- [ ] ` |
+| ++ctrl+z++ | vrátí i automatické úpravy |
+
+Zkratky formátování přepínají: druhé stisknutí formát zase odebere. Bez výběru platí pro slovo pod kurzorem, mimo slovo vloží prázdný pár. Na Macu místo ++ctrl++ funguje ++cmd++. Formátování a zkratky platí jen pro `.md` soubory, ne pro `config.toml`.
 
 ## [api]
 `allowed_hosts` · `["127.0.0.1", "localhost"]`

@@ -291,6 +291,8 @@ STRINGS = {
         "ed_view": "view ↗",
         "ed_history": "history",
         "ed_preview": "preview",
+        "ed_preview_title": "show / hide the preview (Alt+P)",
+        "ed_split": "drag to resize, double-click resets",
         "ed_reload": "reload from file",
         "ed_force": "overwrite",
         "ed_back": "back",
@@ -408,6 +410,8 @@ STRINGS = {
         "ed_view": "zobrazit ↗",
         "ed_history": "historie",
         "ed_preview": "náhled",
+        "ed_preview_title": "zobrazit / skrýt náhled (Alt+P)",
+        "ed_split": "táhni pro změnu šířky, dvojklik vrátí na půl",
         "ed_reload": "načíst ze souboru",
         "ed_force": "přepsat",
         "ed_back": "zpět",
@@ -1679,6 +1683,116 @@ function smartEditor(ta, MD) {
     }
   }
 
+  // ---- inline formatting: markers typed over a selection, Ctrl+B / I / E / Shift+X / Shift+H
+  const WRAP = {'*': '*', '_': '_', '~': '~~', '=': '=='};
+  const WORD = /[\p{L}\p{N}]/u;
+  const BLOCK = /^[ \t]*(?:>[ \t]?)*[ \t]*(?:(?:[-*+]|\d{1,9}[.)])[ \t]+(?:\[[ xX]\][ \t]+)?|#{1,6}[ \t]+)?/;
+  // n markers around a text: is the format `m` on?  (* vs ** share the char: 1|3 = italic, 2|3 = bold)
+  const has = (m, n) => m[0] === '*' ? (m.length === 1 ? n % 2 === 1 : n >= 2) : n >= m.length;
+  const after = (m, n, mode) => mode === 'add' || !has(m, n) ? n + m.length : n - m.length;
+
+  function inline(m, mode) {
+    const v = ta.value, c = m[0], cap = c === '*' ? 3 : m.length;
+    let s = ta.selectionStart, en = ta.selectionEnd;
+    if (v.slice(s, en).includes('\n')) return c === '`' ? fence(v, s, en) : lines(m, mode, v, s, en, cap);
+    while (s < en && /\s/.test(v[s])) s++;          // spaces at the edges stay outside the markers
+    while (en > s && /\s/.test(v[en - 1])) en--;
+    if (s === en && mode === 'toggle') {            // cursor in a word: the whole word
+      while (s > 0 && WORD.test(v[s - 1])) s--;
+      while (en < v.length && WORD.test(v[en])) en++;
+    }
+    let no = 0, ni = 0;                             // markers outside / inside the selection
+    while (no < cap && v[s - 1 - no] === c && v[en + no] === c) no++;
+    while (no + ni < cap && en - s - 2 * ni >= 2 && v[s + ni] === c && v[en - 1 - ni] === c) ni++;
+    const inner = v.slice(s + ni, en - ni), k = after(m, no + ni, mode), mk = c.repeat(k);
+    put(mk + inner + mk, s - no, en + no, k, k + inner.length);
+  }
+
+  // several lines: each non-empty line on its own, list / quote / heading prefixes stay outside
+  function lines(m, mode, v, s, en, cap) {
+    const c = m[0], first = s === lineStart(v, s);
+    const segs = v.slice(s, en).split('\n').map((p, i) => {
+      const pre = i > 0 || first ? BLOCK.exec(p)[0] : '';
+      const rest = p.slice(pre.length), lead = /^\s*/.exec(rest)[0];
+      const body = rest.slice(lead.length).trimEnd(), trail = rest.slice(lead.length + body.length);
+      let n = 0;
+      while (n < cap && body.length - 2 * n >= 2 && body[n] === c && body[body.length - 1 - n] === c) n++;
+      return {pre, lead, body, trail, n};
+    });
+    const on = mode === 'toggle' && segs.every((g) => !g.body || has(m, g.n));
+    const out = segs.map((g) => {
+      if (!g.body) return g.pre + g.lead + g.trail;
+      const k = mode === 'add' ? g.n + m.length : on ? g.n - m.length : has(m, g.n) ? g.n : g.n + m.length;
+      const mk = c.repeat(k);
+      return g.pre + g.lead + mk + g.body.slice(g.n, g.body.length - g.n) + mk + g.trail;
+    }).join('\n');
+    put(out, s, en, 0, out.length);
+  }
+
+  const fullLines = (v, s, en) => [lineStart(v, s), lineEnd(v, en > s && v[en - 1] === '\n' ? en - 1 : en)];
+
+  // ``` fence around the selected lines (or remove it)
+  function fence(v, s, en) {
+    const [ls, le] = fullLines(v, s, en), block = v.slice(ls, le), L = block.split('\n');
+    if (L.length >= 2 && FENCE.test(L[0]) && FENCE.test(L[L.length - 1])) {
+      const inner = L.slice(1, -1).join('\n');
+      put(inner, ls, le, 0, inner.length);
+      return;
+    }
+    const ind = /^[ \t]*/.exec(block)[0];
+    put(ind + '```\n' + block + '\n' + ind + '```', ls, le, ind.length + 3);  // cursor: type a language
+  }
+
+  // Ctrl+Shift+8 / 7 / 9: bullets, numbers, tasks on the selected lines (again = remove)
+  const LISTM = /^((?:[ \t]*>[ \t]?)*[ \t]*)(?:([-*+])|\d{1,9}[.)])[ \t]+(\[[ xX]\][ \t]+)?/;
+  function list(kind) {
+    const v = ta.value, s = ta.selectionStart, en = ta.selectionEnd, [ls, le] = fullLines(v, s, en);
+    const L = v.slice(ls, le).split('\n');
+    const kindOf = (l) => { const m = LISTM.exec(l); return !m ? '' : m[3] ? 'task' : m[2] ? 'bullet' : 'number'; };
+    const on = L.some((l) => l.trim()) && L.every((l) => !l.trim() || kindOf(l) === kind);
+    let i = 0;
+    const out = L.map((l) => {
+      if (!l.trim() && L.length > 1) return l;
+      const m = LISTM.exec(l), pre = m ? m[1] : /^(?:[ \t]*>[ \t]?)*[ \t]*/.exec(l)[0];
+      const body = l.slice(m ? m[0].length : pre.length);
+      if (on) return pre + body;
+      i++;
+      return pre + (kind === 'number' ? i + '. ' : kind === 'task' ? '- [ ] ' : '- ') + body;
+    }).join('\n');
+    if (s === en && L.length === 1) put(out, ls, le, Math.max(0, out.length - (le - s)));
+    else put(out, ls, le, 0, out.length);
+  }
+
+  // Ctrl+K: [text](|), a selected URL becomes [|](url)
+  function link() {
+    const v = ta.value, s = ta.selectionStart, en = ta.selectionEnd, sel = v.slice(s, en);
+    if (sel.includes('\n')) return;
+    if (/^(https?:\/\/|www\.)\S+$/i.test(sel.trim())) { put('[](' + sel.trim() + ')', s, en, 1); return; }
+    put('[' + sel + ']()', s, en, sel ? sel.length + 3 : 1);
+  }
+
+  // letters by e.key (any Latin layout), e.code as a fallback for other scripts
+  const letter = (e) => {
+    const k = (e.key || '').toLowerCase();
+    if (/^[a-z]$/.test(k)) return k;
+    const m = /^Key([A-Z])$/.exec(e.code || '');
+    return m ? m[1].toLowerCase() : '';
+  };
+  ta.addEventListener('keydown', (e) => {
+    // altKey excluded: AltGr (= Ctrl+Alt on Windows) types characters such as { [ on Czech keyboards
+    if (!MD || e.isComposing || e.defaultPrevented || !(e.ctrlKey || e.metaKey) || e.altKey) return;
+    const d = /^Digit([789])$/.exec(e.code || ''), k = letter(e);
+    const act = e.shiftKey
+      ? (d ? () => list({8: 'bullet', 7: 'number', 9: 'task'}[d[1]])
+           : {x: () => inline('~~', 'toggle'), h: () => inline('==', 'toggle')}[k])
+      : {b: () => inline('**', 'toggle'), i: () => inline('*', 'toggle'),
+         e: () => inline('`', 'toggle'), k: link}[k];
+    if (!act) return;
+    e.preventDefault();
+    ltAuto = -1;
+    act();
+  });
+
   // pasting a URL over selected text makes a link: [text](url)
   ta.addEventListener('paste', (e) => {
     if (!MD) return;
@@ -1712,6 +1826,10 @@ function smartEditor(ta, MD) {
     }
     // typing a closer that is already there just steps over it
     if (s === en && CLOSERS.has(k) && next === k) { e.preventDefault(); ta.setSelectionRange(s + 1, s + 1); return; }
+    // * _ ~ = wrap a selection (repeat for **bold**); ` around several lines makes a fence
+    if (MD && s !== en && (WRAP[k] || (k === '`' && v.slice(s, en).includes('\n')))) {
+      e.preventDefault(); inline(WRAP[k] || '`', 'add'); return;
+    }
     const c = PAIRS[k];
     if (!c) return;
     if (s !== en) {  // wrap the selection
@@ -1722,6 +1840,67 @@ function smartEditor(ta, MD) {
     e.preventDefault();
     put(k + c, s, s, 1);
     if (k === '<') ltAuto = s + 1;
+  });
+}
+
+// Editor layout: draggable divider between the editor and the preview (double-click = half,
+// arrow keys on the focused divider) and the "preview" button / Alt+P. Kept in localStorage.
+function editorPanes() {
+  const panes = document.querySelector('.ed-panes'), sp = panes && panes.querySelector('.ed-split');
+  const pv = document.getElementById('pv'), src = panes && panes.querySelector('textarea');
+  if (!sp || !pv) return;
+  const KS = 'h6082-ed-split', KP = 'h6082-ed-preview';
+  const get = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+  const keep = (k, x) => { try { x === null ? localStorage.removeItem(k) : localStorage.setItem(k, x); } catch (e) {} };
+  let pct = null;
+  const setLeft = (x) => {
+    pct = Math.min(85, Math.max(15, x));
+    panes.style.setProperty('--ed-left', pct.toFixed(2) + '%');
+    sp.setAttribute('aria-valuenow', Math.round(pct));
+  };
+  const save = () => keep(KS, pct === null ? null : pct.toFixed(2));
+  const now = () => src.getBoundingClientRect().width / panes.getBoundingClientRect().width * 100;
+  const stored = parseFloat(get(KS));
+  if (stored > 0) setLeft(stored); else sp.setAttribute('aria-valuenow', 50);
+  sp.setAttribute('aria-valuemin', 15);
+  sp.setAttribute('aria-valuemax', 85);
+
+  sp.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    sp.setPointerCapture(e.pointerId);
+    panes.classList.add('dragging');
+    const r = panes.getBoundingClientRect(), half = sp.offsetWidth / 2;
+    const move = (ev) => setLeft((ev.clientX - r.left - half) / r.width * 100);
+    const up = () => {
+      panes.classList.remove('dragging');
+      sp.removeEventListener('pointermove', move);
+      sp.removeEventListener('pointerup', up);
+      sp.removeEventListener('pointercancel', up);
+      save();
+    };
+    sp.addEventListener('pointermove', move);
+    sp.addEventListener('pointerup', up);
+    sp.addEventListener('pointercancel', up);
+  });
+  sp.addEventListener('dblclick', () => {
+    pct = null; panes.style.removeProperty('--ed-left'); sp.setAttribute('aria-valuenow', 50); save();
+  });
+  sp.addEventListener('keydown', (e) => {
+    const d = {ArrowLeft: -2, ArrowRight: 2}[e.key];
+    if (!d) return;
+    e.preventDefault(); setLeft((pct === null ? now() : pct) + d); save();
+  });
+
+  const show = (on, store) => {
+    panes.classList.toggle('no-preview', !on);
+    pv.setAttribute('aria-pressed', String(on));
+    if (store) keep(KP, on ? null : '0');
+  };
+  if (get(KP) === '0') show(false, false);
+  pv.addEventListener('click', () => show(panes.classList.contains('no-preview'), true));
+  document.addEventListener('keydown', (e) => {
+    if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.code === 'KeyP') { e.preventDefault(); pv.click(); }
   });
 }
 """
@@ -1781,6 +1960,7 @@ __SMART__
     if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); save(); }
   });
   smartEditor(ta, /\\.md$/i.test(NAME));
+  editorPanes();
   document.getElementById('reload').onclick = () => { if (!dirty() || confirm(T.confirm_discard)) load(); };
   document.getElementById('force').onclick = () => { if (confirm(T.confirm_overwrite)) save(true); };
   window.addEventListener('beforeunload', (e) => { if (dirty()) { save(); e.preventDefault(); e.returnValue = ''; } });
@@ -1985,12 +2165,17 @@ def build_editor(cfg, tabs, fname):
     plang = m.group(1) if SYSTEM_FILE_RE.match(fname) else (m.group(2) if m else "en")
     preview = stem or default_tab(cfg, tabs)
     about = cfg["page"]["about_tab"] or ""
-    view = f'<a class="tab" href="/{quote(stem)}?lang={plang}">{t(cfg, "ed_view")}</a>' if stem else ""
+    view = (f'<button id="pv" class="tab" type="button" aria-pressed="true" title="{t(cfg, "ed_preview_title")}">'
+            f'{t(cfg, "ed_preview")}</button>' if preview else "")
+    if stem:
+        view += f'<a class="tab" href="/{quote(stem)}?lang={plang}">{t(cfg, "ed_view")}</a>'
     if cfg["history"]["enabled"]:
         view += f'<a class="tab" href="/history/{quote(fname)}">{t(cfg, "ed_history")}</a>'
 
     q = f"?embed=1&lang={plang}" if stem else "?embed=1"
-    iframe = (f'<iframe src="/{quote(preview)}{q}" title="{t(cfg, "ed_preview")}"></iframe>'
+    iframe = (f'<div class="ed-split" role="separator" aria-orientation="vertical" tabindex="0" '
+              f'title="{t(cfg, "ed_split")}"></div>'
+              f'<iframe src="/{quote(preview)}{q}" title="{t(cfg, "ed_preview")}"></iframe>'
               if preview else "")
     body = f"""{tab_bar(cfg, tabs, None, live=False)}
 <div class="editor">

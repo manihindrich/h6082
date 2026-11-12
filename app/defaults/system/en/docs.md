@@ -278,7 +278,33 @@ Preview of another language without saving: `/<name>?lang=cs`.
 `max_size_kb` · `1024`
 : max. size of a saved file
 
-Controls: ++ctrl+s++ saves at once, ++tab++ inserts 4 spaces. Live preview on the right. On a conflict the editor offers *reload from file* or *overwrite*.
+On a conflict the editor offers *reload from file* or *overwrite*. Controls are in the Editor block.
+
+## Editor
+Saves by itself after a short pause in typing, ++ctrl+s++ saves at once. Live preview on the right.
+
+- **editor | preview divider**: drag it; a double-click puts it back in the middle, ++arrow-left++ ++arrow-right++ work on the focused divider. The width is remembered in the browser.
+- **preview** (the button next to *view*) or ++alt+p++: hides / shows the preview
+- **pairing**: `` ( [ { < " ' ` `` close themselves, typing the closer just steps over it, ++backspace++ deletes an empty pair
+- **lists and quotes**: ++enter++ continues `-`, `1.`, `- [ ]` and `>`; ++enter++ on an empty item ends the list. ```` ```lang ```` + ++enter++ closes the code block.
+- **indent**: ++tab++ / ++shift+tab++ indents a list item or all selected lines
+- **selected text**: typing `*` wraps it in italics, another `*` makes it bold; `_` italics, `~` ~~strikethrough~~, `=` ==highlight==, `` ` `` code (several lines → a ```` ``` ```` block). Spaces at the edges of the selection stay outside; with several lines each one is wrapped on its own and list markers stay in place.
+- **pasting a URL** over selected text makes a link `[text](url)`
+
+| shortcut | action |
+|---|---|
+| ++ctrl+b++ | **bold** |
+| ++ctrl+i++ | *italic* |
+| ++ctrl+e++ | `code`, a block for several lines |
+| ++ctrl+k++ | link `[text]()`, a selected URL becomes `[](url)` |
+| ++ctrl+shift+x++ | ~~strikethrough~~ |
+| ++ctrl+shift+h++ | ==highlight== |
+| ++ctrl+shift+8++ | bullets `- ` |
+| ++ctrl+shift+7++ | numbered list `1. ` |
+| ++ctrl+shift+9++ | tasks `- [ ] ` |
+| ++ctrl+z++ | undoes the automatic edits too |
+
+Formatting shortcuts toggle: pressing one again removes the format. Without a selection they apply to the word under the cursor; outside a word they insert an empty pair. On a Mac ++cmd++ works instead of ++ctrl++. Formatting and shortcuts apply to `.md` files only, not to `config.toml`.
 
 ## [api]
 `allowed_hosts` · `["127.0.0.1", "localhost"]`
