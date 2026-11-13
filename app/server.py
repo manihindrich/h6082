@@ -350,7 +350,7 @@ STRINGS = {
         "ld_aria": "an editor writing markdown and a live preview of the page",
         "ld_pause": "pause / play",
         "ld_saved": "✓ saved to the file",
-        "demo_off": "Not available in the demo",
+        "demo_off": "You can't try this in the demo",
         "demo_bar": "Demo: you can edit pages, tasks, notes and ✎ blocks. Changes stay only in this browser.",
         "demo_reset": "reset the demo",
         "err_demo": "not available in the demo",
@@ -507,7 +507,7 @@ STRINGS = {
         "ld_aria": "editor, ve kterém vzniká markdown, a živý náhled stránky",
         "ld_pause": "pozastavit / spustit",
         "ld_saved": "✓ uloženo do souboru",
-        "demo_off": "V demo módu není k dispozici",
+        "demo_off": "V demu to nejde vyzkoušet",
         "demo_bar": "Demo: stránky, úkoly, poznámky i bloky ✎ můžeš upravovat. Změny zůstávají jen v tomto prohlížeči.",
         "demo_reset": "obnovit demo",
         "err_demo": "v demo módu není k dispozici",
@@ -1208,7 +1208,7 @@ def files_markdown(cfg, which="all"):
 
 def demo_off(cfg):
     """Attributes for a control that exists but does nothing in demo mode (shown dimmed with a hint)."""
-    return f' data-demo-off aria-disabled="true" title="{html.escape(t(cfg, "demo_off"))}"' if DEMO else ""
+    return f' data-demo-off aria-disabled="true" data-demo-tip="{html.escape(t(cfg, "demo_off"))}"' if DEMO else ""
 
 
 def newfile_html(cfg):
@@ -2371,10 +2371,32 @@ window.h6082Demo = (() => {
     if (window.h6082 && window.h6082.init) window.h6082.init();
     count();
   }
+  // a hint right away on hover, keyboard focus and tap (the native title is slow and missing on touch)
+  const tip = document.createElement('div');
+  tip.className = 'demo-tip'; tip.hidden = true; tip.setAttribute('role', 'status');
+  document.body.append(tip);
+  let tipT = 0;
+  function showTip(el, ms) {
+    clearTimeout(tipT);
+    tip.textContent = el.dataset.demoTip || '';
+    tip.hidden = false;
+    const r = el.getBoundingClientRect();
+    const x = Math.min(Math.max(8, r.left + r.width / 2 - tip.offsetWidth / 2), innerWidth - tip.offsetWidth - 8);
+    const y = r.top - tip.offsetHeight - 6 < 4 ? r.bottom + 6 : r.top - tip.offsetHeight - 6;
+    tip.style.left = x + 'px'; tip.style.top = y + 'px';
+    if (ms) tipT = setTimeout(() => { tip.hidden = true; }, ms);
+  }
+  const off = (n) => n && n.closest ? n.closest('[data-demo-off]') : null;
+  document.addEventListener('mouseover', (e) => { const el = off(e.target); if (el) showTip(el); });
+  document.addEventListener('mouseout', (e) => { const el = off(e.target); if (el && off(e.relatedTarget) !== el) tip.hidden = true; });
+  document.addEventListener('focusin', (e) => { const el = off(e.target); if (el) showTip(el); });
+  document.addEventListener('focusout', (e) => { if (off(e.target)) tip.hidden = true; });
   for (const ev of ['click', 'submit']) {
     document.addEventListener(ev, (e) => {
-      if (!e.target.closest('[data-demo-off]')) return;
+      const el = off(e.target);
+      if (!el) return;
       e.preventDefault(); e.stopImmediatePropagation();
+      showTip(el, 2200);
     }, true);
   }
   document.addEventListener('click', (e) => {
@@ -3606,8 +3628,8 @@ def editor_langs(cfg, fname, p):
             elif f.is_file():
                 items.append(f'<a class="tab" href="/edit/{quote(f.name)}" title="{f.name}">{label}</a>')
             elif lang and cfg["editor"]["enabled"]:
-                items.append(f'<button type="button" class="tab sub" data-new="{base}.{lang}"{demo_off(cfg)} '
-                             f'title="{html.escape(t(cfg, "ed_lang_new_title", f=f.name))}">+ {lang}</button>')
+                tip = "" if DEMO else f' title="{html.escape(t(cfg, "ed_lang_new_title", f=f.name))}"'
+                items.append(f'<button type="button" class="tab sub" data-new="{base}.{lang}"{demo_off(cfg)}{tip}>+ {lang}</button>')
         if sum(1 for f in page_variants(base)) < 2:   # no translations: no language buttons
             return ""
     elif m := SYSTEM_FILE_RE.match(fname):

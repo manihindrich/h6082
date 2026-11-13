@@ -178,7 +178,7 @@ Spouštěj ho se systémem souborů jen pro čtení a bez volume (viz `h6082-dep
 - upravuje stránky v editoru, odškrtává a přidává úkoly, píše do poznámek a mění bloky `##*`
 - změny se ukládají jen v jeho prohlížeči (`localStorage`) a vydrží, dokud nezmáčkne *obnovit demo*; server nic nezapíše
 - stránku s jeho změnami vykreslí server přes `/api/render`, nic si přitom neukládá; RSS a kontroly stavu z textu návštěvníka se nespouštějí
-- zakládání, přejmenování a mazání souborů, úprava configu a historie zůstanou vidět ztlumené, s nápovědou „v demo módu není k dispozici“
+- nic není skryté: zakládání, přejmenování a mazání souborů, přidání překladu, úprava configu a historie zůstanou vidět ztlumené, nic nedělají a po najetí myší, zaměření nebo klepnutí ukážou „V demu to nejde vyzkoušet“
 
 #
 ## Ukázková data

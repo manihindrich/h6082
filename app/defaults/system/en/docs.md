@@ -178,7 +178,7 @@ Run it with a read-only file system and no volume (see `h6082-deploy-demo`). Eve
 - they edit pages in the editor, tick and add tasks, write notes and change `##*` blocks
 - changes are kept only in their browser (`localStorage`) and last until they press *reset the demo*; the server writes nothing
 - the server renders the page with their changes through `/api/render` and stores nothing; RSS and status checks from a visitor's text never run
-- creating, renaming and deleting files, editing the config and history stay visible but dimmed, with the hint "Not available in the demo"
+- nothing is hidden: creating, renaming and deleting files, adding a translation, editing the config and history stay visible but dimmed; they do nothing and on hover, focus or tap show "You can't try this in the demo"
 
 #
 ## Sample data
