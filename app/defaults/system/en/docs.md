@@ -45,6 +45,7 @@ H6082_EDITOR_USER=h6082
 H6082_EDITOR_PASSWORD=… # openssl rand -base64 24
 H6082_ALLOWED_HOSTS=    # extra hostnames, e.g. a domain behind a reverse proxy
 H6082_READONLY=         # 1 = public read-only page (see Read-only mode)
+H6082_DEMO=             # 1 = demo: read-only, but edits in the visitor's browser
 H6082_DISK_ROOT=/var/empty
 ```
 After changing `.env` run `docker compose up -d`. Exposing the page to a network is covered by the Security block.
@@ -172,16 +173,31 @@ On a server, updates are done by the deploy workflow (repository `h6082-deploy`)
 
 Run it with a read-only file system and no volume (see `h6082-deploy-demo`). Even a bug in the application then has nowhere to write, and a restart is always clean.
 
-#
-## Demo mode
-The `{{sys}}` and `{{history}}` blocks have a `demo` switch. With it they show **made-up data**, generated right in the browser without asking the server. Handy for examples, documentation and public pages.
+**Demo mode** (`H6082_DEMO=1`) is read-only mode in which visitors can try the application out:
 
-| block | demo | real data |
+- they edit pages in the editor, tick and add tasks, write notes and change `##*` blocks
+- changes are kept only in their browser (`localStorage`) and last until they press *reset the demo*; the server writes nothing
+- the server renders the page with their changes through `/api/render` and stores nothing; RSS and status checks from a visitor's text never run
+- creating, renaming and deleting files, editing the config and history stay visible but dimmed, with the hint "Not available in the demo"
+
+#
+## Sample data
+Instead of real values these show **made-up data**. Handy for examples, documentation and public pages, because they reveal nothing about the server and none of your file names. This has nothing to do with the `H6082_DEMO` demo mode (see Read-only mode); it works in every mode.
+
+| element | sample data | real data |
 |---|---|---|
 | server | `{{sys demo}}` | `{{sys}}` + `[system] enabled = true` |
 | history | `{{history 5 demo}}` | `{{history 5}}` |
+| anything in `{{livedemo}}` | always | not possible |
 
-The demo tabs and the markdown showcase use demo mode, so they reveal neither server data nor the names of your files.
+- `{{sys demo}}` and `{{history … demo}}` are generated right in the browser, the server is not asked at all. They work even where real data is off (read-only mode, demo mode).
+- **in `{{livedemo}}`** everything is prepared in advance and neither the server nor the browser downloads anything:
+  - status dots `{.check}` are green, `{.check .warn}` orange, `{.check .down}` red, the hint shows a made-up response
+  - `{{rss URL}}` shows sample articles matching the address (news, recipes, design, journals, security, otherwise generic)
+  - `{{sys}}` and `{{history}}` always show sample data
+  - tasks, notes and `##*` blocks are changed only by the animation; they can't be edited by clicking and don't count among the page's tasks
+
+The markdown showcase and the demo tabs use sample data. The exception is service status and RSS on the demo tabs outside `{{livedemo}}`: those are real. Public sites and feeds show their actual state; the sample home-network addresses (`192.168.1.x` in the family demo) will be unreachable from a server outside your network.
 
 #__ Security
 ## `Security`
@@ -251,6 +267,7 @@ Saves by itself after a short pause in typing, ++ctrl+s++ saves at once. Live pr
 - **indent**: ++tab++ / ++shift+tab++ indents a list item or all selected lines
 - **selected text**: typing `*` wraps it in italics, another `*` makes it bold; `_` italics, `~` ~~strikethrough~~, `=` ==highlight==, `` ` `` code (several lines → a ```` ``` ```` block). Spaces at the edges of the selection stay outside; with several lines each one is wrapped on its own and list markers stay in place.
 - **pasting a URL** over selected text makes a link `[text](url)`
+- **suggestions**: after `#` at the line start, `{{`, `> [!`, `{.`, `](/` or `- [` it offers the syntax; ++enter++ / ++tab++ confirm, ++esc++ closes. See the [markdown showcase](/markdown#editor-suggestions).
 - a file changed elsewhere (vim, git) is never overwritten; the editor offers *reload from file* or *overwrite*
 - invalid TOML is saved, but the last valid config stays in effect
 - **history** shows the file's versions, diff and restore
@@ -281,6 +298,9 @@ Formatting shortcuts toggle: pressing one again removes the format. Without a se
 
 `max_size_kb` · `1024`
 : max. size of a saved file
+
+`suggest` · `true`
+: suggestions of markdown and shortcodes while typing (editor and `##*` blocks, not on touch devices)
 
 On a conflict the editor offers *reload from file* or *overwrite*. Controls are in the Editor block.
 

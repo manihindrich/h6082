@@ -1,7 +1,7 @@
 #__
 /
 
-# Struktura
+#+ Struktura
 ## `Struktura`
 
 ## Záložky
@@ -521,8 +521,11 @@ Odstavec.
 ```
 Za prvek jde přidat `{#id}`, `{.třída}`, `{klíč=hodnota}` i `{: style="…" }`.
 
-# Živé prvky
+#__
+//
 ## `Živé prvky`
+
+# Sledování
 
 ## Stav služeb
 - [GitHub](https://github.com){.check}
@@ -558,6 +561,19 @@ Kontroly běží ze serveru v kontejneru. Služby na hostiteli: `host.docker.int
 > Ukázka výše má **vymyšlené hodnoty** (`demo`), generuje je prohlížeč a server se na nic neptá.
 > Skutečné hodnoty: v `config.toml` nastav `[system] enabled = true` a z bloku odeber `demo`. Výchozí stav je vypnuto, protože `/api/sys` vidí každý, kdo vidí stránku.
 
+# Feedy a historie
+
+## RSS
+{{rss https://news.ycombinator.com/rss 5}}
+
+```md
+{{rss https://news.ycombinator.com/rss 5}}
+```
+- celý řádek = jeden feed, číslo = počet položek (výchozí `[rss] default_limit`)
+- RSS 2.0, RSS 1.0 i Atom
+- 💬 = odkaz na komentáře, pokud je feed má
+- server drží feed v cache `[rss] refresh_min` minut a při výpadku zdroje ukáže poslední známý stav
+
 ## Historie změn
 {{history 5 demo}}
 
@@ -573,19 +589,60 @@ Kontroly běží ze serveru v kontejneru. Služby na hostiteli: `host.docker.int
 > [!info] Demo režim
 > Ukázka výše má **vymyšlené změny** (`demo`). Skutečná historie by ukázala názvy tvých souborů a časy úprav. Stačí z bloku odebrat `demo`.
 
-## RSS
-{{rss https://news.ycombinator.com/rss 5}}
+#+ Editor a ukázky
+
+## Našeptávání v editoru
+{{livedemo 8}}
+{{scene napoveda.md}}
+##* Termíny
+**1. 3.** pojištění
+> [!tip] Tip
+> Editor napoví i shortcody.
+{{rss https://news.ycombinator.com/rss 3}}
+{{/livedemo}}
 
 ```md
-{{rss https://news.ycombinator.com/rss 5}}
+#        → sloupce a bloky: #+ #- #__ ## ##* …
+{{       → shortcody: {{rss URL 5}}, {{note}} …
+> [!     → callouty: tip, warning, danger … i sbalené
+{.       → třídy: .check .center .big .fill …
+](/      → názvy tvých stránek
+- [      → úkol
 ```
-- celý řádek = jeden feed, číslo = počet položek (výchozí `[rss] default_limit`)
-- RSS 2.0, RSS 1.0 i Atom
-- 💬 = odkaz na komentáře, pokud je feed má
-- server drží feed v cache `[rss] refresh_min` minut a při výpadku zdroje ukáže poslední známý stav
+- nabídka se ukáže jen po těchto začátcích, ne u každého slova
+- ++arrow-up++ ++arrow-down++ vybírá, ++enter++ nebo ++tab++ potvrdí, ++esc++ zavře; bez nabídky ++enter++ funguje jako obvykle
+- u shortcodu se po potvrzení označí parametr (`URL`), stačí ho přepsat
+- funguje v editoru i při úpravě bloku `##*` na stránce, ne na dotykových zařízeních; vypnutí: `[editor] suggest = false`
+
+## Živá ukázka
+{{livedemo 12}}
+#
+## Odkazy
+- [Mapy](https://mapy.cz)
+#
+## Dnes
+- [ ] nakoupit
+{{/livedemo}}
+
+```md
+{{livedemo 12}}
+#
+## Odkazy
+- [Mapy](https://mapy.cz)
+#
+## Dnes
+- [ ] nakoupit
+{{/livedemo}}
+```
+- okno editoru postupně „píše“ markdown mezi značkami a náhled pod ním se po každém řádku překreslí
+- číslo = délka jednoho průchodu v sekundách (výchozí 30), pak 4 s pauza a znovu od začátku
+- ❚❚ v liště okna animaci zastaví; mimo obrazovku stojí sama, při omezeném pohybu v systému se ukáže rovnou hotový stav
+- obsah je jen ukázka: úkoly nejdou odškrtnout a nepočítají se mezi úkoly stránky
+
+# Přehled shortcodů
 
 ## Shortcody
-Ukázka: bloky Server, Historie změn a RSS výše.
+Ukázka: bloky Server, Historie změn a RSS vlevo.
 
 ```md
 {{files}}
@@ -594,6 +651,7 @@ Ukázka: bloky Server, Historie změn a RSS výše.
 {{sys [části…] [demo]}}
 {{history [soubor] [počet] [demo]}}
 {{note}} … {{/note}}
+{{livedemo [sekundy]}} … {{/livedemo}}
 {{theme}}
 {{lang}}
 {{email jméno doména}}
@@ -602,6 +660,7 @@ Ukázka: bloky Server, Historie změn a RSS výše.
 
 - `{{files}}`: seznam souborů s tlačítky *zobrazit* a *upravit*. `user` = jen tvoje, `system` = dokumentace, konfigurace a markdown.
 - `{{newfile}}`: formulář pro nový `.md` soubor
+- `{{livedemo [sekundy]}} … {{/livedemo}}`: animované okno editoru s živým náhledem, viz [Živá ukázka](#ziva-ukazka)
 - `{{theme}}`: dlaždice motivů, klik uloží `[theme] default`
 - `{{lang}}`: přepínač jazyka, uloží `[page] lang`
 - `{{email jméno doména}}`: chráněný e-mail, jako jediný funguje i uprostřed řádku

@@ -45,6 +45,7 @@ H6082_EDITOR_USER=h6082
 H6082_EDITOR_PASSWORD=… # openssl rand -base64 24
 H6082_ALLOWED_HOSTS=    # další hostnames, např. doména za reverzní proxy
 H6082_READONLY=         # 1 = veřejná stránka jen pro čtení (viz Režim jen pro čtení)
+H6082_DEMO=             # 1 = demo: jen pro čtení, ale úpravy v prohlížeči návštěvníka
 H6082_DISK_ROOT=/var/empty
 ```
 Po změně `.env` spusť `docker compose up -d`. Zpřístupnění do sítě popisuje blok Bezpečnost.
@@ -172,16 +173,31 @@ Na serveru aktualizaci dělá deploy workflow (repozitář `h6082-deploy`).
 
 Spouštěj ho se systémem souborů jen pro čtení a bez volume (viz `h6082-deploy-demo`). I chyba v aplikaci pak nemá kam zapsat a restart je vždy čistý.
 
-#
-## Demo režim
-Bloky `{{sys}}` a `{{history}}` mají přepínač `demo`. S ním ukážou **vymyšlená data**, která vzniknou přímo v prohlížeči bez dotazu na server. Hodí se do ukázek, dokumentace a na veřejné stránky.
+**Demo mód** (`H6082_DEMO=1`) je režim jen pro čtení, ve kterém si návštěvník aplikaci může vyzkoušet:
 
-| blok | demo | skutečná data |
+- upravuje stránky v editoru, odškrtává a přidává úkoly, píše do poznámek a mění bloky `##*`
+- změny se ukládají jen v jeho prohlížeči (`localStorage`) a vydrží, dokud nezmáčkne *obnovit demo*; server nic nezapíše
+- stránku s jeho změnami vykreslí server přes `/api/render`, nic si přitom neukládá; RSS a kontroly stavu z textu návštěvníka se nespouštějí
+- zakládání, přejmenování a mazání souborů, úprava configu a historie zůstanou vidět ztlumené, s nápovědou „v demo módu není k dispozici“
+
+#
+## Ukázková data
+Místo skutečných údajů ukážou **vymyšlená data**. Hodí se do ukázek, dokumentace a na veřejné stránky, protože neprozradí nic o serveru ani názvy tvých souborů. Nemá to nic společného s demo módem `H6082_DEMO` (viz Režim jen pro čtení), funguje to v každém režimu.
+
+| prvek | ukázková data | skutečná data |
 |---|---|---|
 | server | `{{sys demo}}` | `{{sys}}` + `[system] enabled = true` |
 | historie | `{{history 5 demo}}` | `{{history 5}}` |
+| cokoli v `{{livedemo}}` | vždy | nejde |
 
-Demo záložky a ukázka markdownu používají demo režim, takže neprozradí údaje o serveru ani názvy tvých souborů.
+- `{{sys demo}}` a `{{history … demo}}` vzniknou přímo v prohlížeči, server se na nic neptá. Fungují i tam, kde jsou skutečná data vypnutá (režim jen pro čtení, demo mód).
+- **v `{{livedemo}}`** je všechno připravené předem a server ani prohlížeč nic nestahují:
+  - tečky stavu `{.check}` jsou zelené, `{.check .warn}` oranžová, `{.check .down}` červená, nápověda ukáže vymyšlenou odezvu
+  - `{{rss URL}}` ukáže vzorové články podle adresy (zprávy, recepty, design, časopisy, bezpečnost, jinak obecné)
+  - `{{sys}}` a `{{history}}` jsou vždy s ukázkovými daty
+  - úkoly, poznámky a bloky `##*` mění jen animace, kliknutím nejdou upravit a nepočítají se mezi úkoly stránky
+
+Ukázka markdownu i demo záložky používají ukázková data. Výjimkou jsou stav služeb a RSS na demo záložkách mimo `{{livedemo}}`: ty jsou skutečné. Veřejné weby a feedy ukážou opravdový stav, ukázkové adresy z domácí sítě (`192.168.1.x` v demu rodiny) budou na serveru mimo tvou síť nedostupné.
 
 #__ Bezpečnost
 ## `Bezpečnost`
@@ -251,6 +267,7 @@ Ukládá se samo po chvíli bez psaní, ++ctrl+s++ uloží hned. Vpravo je živ�
 - **odsazení**: ++tab++ / ++shift+tab++ odsadí položku seznamu nebo všechny vybrané řádky
 - **označený text**: napsání `*` ho obalí kurzívou, další `*` udělá tučné; `_` kurzíva, `~` ~~přeškrtnutí~~, `=` ==zvýraznění==, `` ` `` kód (víc řádků → blok ```` ``` ````). Mezery na okrajích výběru zůstanou vně, u více řádků se obalí každý zvlášť a značky seznamu zůstanou na místě.
 - **vložení URL** přes označený text vytvoří odkaz `[text](url)`
+- **našeptávání**: po `#` na začátku řádku, `{{`, `> [!`, `{.`, `](/` nebo `- [` nabídne syntaxi; ++enter++ / ++tab++ potvrdí, ++esc++ zavře. Viz [ukázka markdownu](/markdown#naseptavani-v-editoru).
 - soubor změněný jinde (vim, git) nepřepíše, nabídne *načíst ze souboru* nebo *přepsat*
 - chybný TOML uloží, ale dál platí poslední platný config
 - **historie** ukáže verze souboru, diff a obnovení
@@ -281,6 +298,9 @@ Zkratky formátování přepínají: druhé stisknutí formát zase odebere. Bez
 
 `max_size_kb` · `1024`
 : max. velikost ukládaného souboru
+
+`suggest` · `true`
+: našeptávání markdownu a shortcodů při psaní (editor i bloky `##*`, ne na dotykových zařízeních)
 
 Při konfliktu editor nabídne *načíst ze souboru* nebo *přepsat*. Ovládání je v bloku Editor.
 

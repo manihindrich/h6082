@@ -17,6 +17,7 @@ services:
       H6082_EDITOR_PASSWORD: ${H6082_EDITOR_PASSWORD:-}
       H6082_ALLOWED_HOSTS: ${H6082_ALLOWED_HOSTS:-}
       H6082_READONLY: ${H6082_READONLY:-}
+      H6082_DEMO: ${H6082_DEMO:-}
     volumes:
       # content: writable for the web editor
       - ./content:/app/content

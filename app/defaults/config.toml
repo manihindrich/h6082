@@ -16,7 +16,7 @@ live_reload   = true       # the page refreshes itself after an .md / config sav
 # Each content/pages/*.md is one tab; the name = file name without .md.
 # name.cs.md / name.en.md is a translation of name.md, shown according to [page] lang.
 # User tabs are on the left; the about tab ([page] about_tab) is on the right.
-order       = []         # order from the left, e.g. ["dev", "infra"]; other files follow alphabetically
+order       = ["demo"]   # order from the left, e.g. ["dev", "infra"]; other files follow alphabetically
 hidden      = []           # hidden from the bar, still reachable via /<name> and from the h6082 page
 show_single = true         # show the bar even with a single user tab
 
@@ -36,6 +36,7 @@ demo-student           = { en = "demo · student",    cs = "demo · studentka" }
 enabled     = true
 autosave_ms = 800          # autosave delay after the last key press
 max_size_kb = 1024         # max. size of a saved file
+suggest     = true         # suggestions while typing markdown (after #, {{, > [!, {., ](/ …); Enter / Tab confirm
 
 [api]
 allowed_hosts = ["127.0.0.1", "localhost"]    # Host the server answers to and Origin for /api (against DNS rebinding)

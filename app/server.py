@@ -49,6 +49,10 @@ APP = Path(__file__).resolve().parent
 # Read-only mode for a public demo: no writes at all (editor, notes, tasks, theme, language,
 # history), no live reload; content comes only from the image (app/defaults/), no volume needed.
 READONLY = os.environ.get("H6082_READONLY", "").lower() in ("1", "true", "yes")
+# Demo mode for a public instance: read-only on the server, but visitors may edit pages, tasks,
+# notes and ##* blocks — their changes live only in their own browser (localStorage).
+DEMO = os.environ.get("H6082_DEMO", "").lower() in ("1", "true", "yes")
+READONLY = READONLY or DEMO
 CONTENT = APP / "defaults" if READONLY else Path(os.environ.get("CONTENT_DIR", APP / "content"))
 CFG_FILE = CONTENT / "config.toml"
 PAGES = Path(os.environ.get("PAGES_DIR", CONTENT / "pages"))
@@ -95,6 +99,7 @@ DEFAULTS = {
         "enabled": True,
         "autosave_ms": 800,
         "max_size_kb": 1024,
+        "suggest": True,
     },
     "api": {
         "allowed_hosts": ["127.0.0.1", "localhost"],
@@ -342,6 +347,17 @@ STRINGS = {
         "ed_force": "overwrite",
         "ed_back": "back",
         "ed_rename": "rename",
+        "ld_aria": "an editor writing markdown and a live preview of the page",
+        "ld_pause": "pause / play",
+        "ld_saved": "✓ saved to the file",
+        "demo_off": "Not available in the demo",
+        "demo_bar": "Demo: you can edit pages, tasks, notes and ✎ blocks. Changes stay only in this browser.",
+        "demo_reset": "reset the demo",
+        "err_demo": "not available in the demo",
+        "err_rate": "too many requests, try again in a minute",
+        "js_demo_saved": "saved in this browser",
+        "js_demo_changed": "changed pages: {n}",
+        "js_demo_reset_confirm": "Discard all your changes and return the demo to its original state?",
         "block_edit": "edit this block",
         "err_block_changed": "the block was changed elsewhere — the page reloads, try again",
         "err_block_heading": "a block cannot contain # / ## lines — add new blocks in the editor",
@@ -488,6 +504,17 @@ STRINGS = {
         "ed_force": "přepsat",
         "ed_back": "zpět",
         "ed_rename": "přejmenovat",
+        "ld_aria": "editor, ve kterém vzniká markdown, a živý náhled stránky",
+        "ld_pause": "pozastavit / spustit",
+        "ld_saved": "✓ uloženo do souboru",
+        "demo_off": "V demo módu není k dispozici",
+        "demo_bar": "Demo: stránky, úkoly, poznámky i bloky ✎ můžeš upravovat. Změny zůstávají jen v tomto prohlížeči.",
+        "demo_reset": "obnovit demo",
+        "err_demo": "v demo módu není k dispozici",
+        "err_rate": "příliš mnoho požadavků, zkus to za minutu",
+        "js_demo_saved": "uloženo v tomto prohlížeči",
+        "js_demo_changed": "změněné stránky: {n}",
+        "js_demo_reset_confirm": "Zahodit všechny své změny a vrátit demo do původního stavu?",
         "block_edit": "upravit blok",
         "err_block_changed": "blok se mezitím změnil jinde — stránka se načte znovu, zkus to pak",
         "err_block_heading": "blok nesmí obsahovat řádky # / ## — nové bloky přidej v editoru",
@@ -618,6 +645,7 @@ def js_strings(cfg):
     """JS strings as a JSON object literal, safe to embed in <script>."""
     d = {k[3:]: v for k, v in STRINGS[cur_lang(cfg)].items() if k.startswith("js_")}
     d["readonly"] = READONLY
+    d["demo"] = DEMO
     return json.dumps(d, ensure_ascii=False).replace("</", "<\\/")
 
 
@@ -754,7 +782,7 @@ def readonly_overrides(cfg):
     if not READONLY:
         return cfg
     cfg = copy.deepcopy(cfg)
-    cfg["editor"]["enabled"] = False
+    cfg["editor"]["enabled"] = DEMO   # demo: edits go to the visitor's browser, never to disk
     cfg["history"]["enabled"] = False
     cfg["system"]["enabled"] = False
     cfg["page"]["live_reload"] = False
@@ -928,7 +956,10 @@ def themes_css(cfg):
     dark = T.get(th["auto_dark"], T["obsidian"])
     light = T.get(th["auto_light"], T.get("obsidian-light", T["obsidian"]))
     auto = ':root[data-theme="auto"]'
-    out.append(_theme_block(auto, dark) + pygments_css(dark["pygments_style"], f"{auto} .highlight") + "\n")
+    # dark code colours only without a light OS: tokens the light style leaves out would otherwise
+    # keep them (white text on a light background)
+    out.append(_theme_block(auto, dark) + "@media not all and (prefers-color-scheme: light){"
+               + pygments_css(dark["pygments_style"], f"{auto} .highlight") + "}\n")
     out.append("@media (prefers-color-scheme: light){" + _theme_block(auto, light)
                + pygments_css(light["pygments_style"], f"{auto} .highlight") + "}\n")
     return "".join(out)
@@ -1147,8 +1178,8 @@ def files_markdown(cfg, which="all"):
     The system list: documentation, configuration, markdown showcase."""
     ed = cfg["editor"]["enabled"]
 
-    def btn(href, label):
-        return f'<a class="tab" href="{href}">{html.escape(label)}</a>'
+    def btn(href, label, extra=""):
+        return f'<a class="tab" href="{href}"{extra}>{html.escape(label)}</a>'
 
     def row(name, btns, desc=""):
         d = f'<small class="file-desc">{html.escape(desc)}</small>' if desc else ""
@@ -1166,7 +1197,7 @@ def files_markdown(cfg, which="all"):
     if which in ("all", "system"):
         sysrows.append(row("markdown", [btn("/markdown", t(cfg, "f_showcase"))], t(cfg, "f_markdown_desc")))
         sysrows.append(row(t(cfg, "f_docs"), [btn("/docs", t(cfg, "f_view"))], t(cfg, "f_docs_desc")))
-        sysrows.append(row(t(cfg, "f_config"), [btn("/edit/config.toml", t(cfg, "f_edit"))] if ed else [],
+        sysrows.append(row(t(cfg, "f_config"), [btn("/edit/config.toml", t(cfg, "f_edit"), demo_off(cfg))] if ed else [],
                            t(cfg, "f_config_desc")))
     if not rows and not sysrows:
         return ["", f"<small>{t(cfg, 'no_files')}</small>", ""]
@@ -1175,10 +1206,17 @@ def files_markdown(cfg, which="all"):
     return ["", out, ""]
 
 
+def demo_off(cfg):
+    """Attributes for a control that exists but does nothing in demo mode (shown dimmed with a hint)."""
+    return f' data-demo-off aria-disabled="true" title="{html.escape(t(cfg, "demo_off"))}"' if DEMO else ""
+
+
 def newfile_html(cfg):
-    return (f'<form class="newfile"><input name="n" placeholder="{t(cfg, "newfile_placeholder")}" autocomplete="off" '
-            'pattern="[A-Za-z0-9][A-Za-z0-9_.\\-]*" required><span>.md</span>'
-            f'<button type="submit" title="{html.escape(t(cfg, "newfile_title"))}">{t(cfg, "newfile_button")}</button></form>')
+    off = demo_off(cfg)
+    title = "" if off else f' title="{html.escape(t(cfg, "newfile_title"))}"'
+    return (f'<form class="newfile"{off}><input name="n" placeholder="{t(cfg, "newfile_placeholder")}" autocomplete="off" '
+            f'pattern="[A-Za-z0-9][A-Za-z0-9_.\\-]*" required{" readonly" if off else ""}><span>.md</span>'
+            f'<button type="submit"{title}>{t(cfg, "newfile_button")}</button></form>')
 
 
 def lang_buttons(cfg):
@@ -1731,10 +1769,21 @@ PAGE_JS = """<script nonce="__NONCE__">
 window.h6082 = (() => {
   const T = __T__;
   const CHECK_S = __CHECK_S__;
+  const DEMO_OPS = ['/api/tasks', '/api/note', '/api/block'];
   const api = async (url, opt = {}) => {
-    const r = await fetch(url, {...opt, cache: 'no-store',
+    let body = opt.body, file = null;
+    if (T.demo && window.h6082Demo && body && DEMO_OPS.includes(url)) {   // demo: work on the visitor's copy
+      const b = JSON.parse(body);
+      file = b.file;
+      const doc = window.h6082Demo.get(file);
+      if (doc !== null) b.doc = doc;
+      body = JSON.stringify(b);
+    }
+    const r = await fetch(url, {...opt, body, cache: 'no-store',
       headers: {'X-H6082': '1', 'Content-Type': 'application/json'}});
-    return {ok: r.ok, status: r.status, j: await r.json().catch(() => ({}))};
+    const j = await r.json().catch(() => ({}));
+    if (file && r.ok && typeof j.doc === 'string') window.h6082Demo.set(file, j.doc);
+    return {ok: r.ok, status: r.status, j};
   };
 
   document.addEventListener('submit', async (e) => {
@@ -1747,7 +1796,7 @@ window.h6082 = (() => {
   });
 
   async function checks() {
-    const els = [...document.querySelectorAll('[data-check]')];
+    const els = [...document.querySelectorAll('[data-check]')].filter((e) => !e.closest('.ld-preview'));
     if (!els.length) return;
     const targets = [...new Set(els.map((e) => e.dataset.check))];
     const r = await api('/api/check', {method: 'POST', body: JSON.stringify({targets})}).catch(() => null);
@@ -2051,8 +2100,231 @@ window.h6082 = (() => {
     });
   });
 
+  // ---- {{livedemo}}: scenes typed into an editor window; then a mouse edits the page itself
+  function livedemos() {
+    document.querySelectorAll('.livedemo:not([data-ready])').forEach((box) => {
+      box.dataset.ready = '1';
+      let data;
+      try { data = JSON.parse(box.querySelector('.ld-data').textContent); } catch (e) { return; }
+      if (!data.scenes || !data.scenes.length) return;
+      const $ = (s) => box.querySelector(s);
+      const src = $('.ld-src'), view = $('.ld-preview'), btn = $('.ld-toggle'), file = $('.ld-file');
+      const saved = $('.ld-saved'), mouse = $('.ld-mouse'), stage = $('.ld-stage'), win = $('.ld-win');
+      const esc = (t) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+      const hl = (t) => !t ? '' : typeof window.highlightText === 'function' ? window.highlightText(t, 'md') : esc(t);
+      let paused = false, visible = true;
+      const running = () => !paused && visible && !document.hidden;
+      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+      async function wait(ms) {             // time runs only while playing and on screen
+        while (ms > 0) { const d = Math.min(ms, 60); await sleep(d); if (running()) ms -= d; }
+      }
+      function draw(lines, caret, mark) {
+        src.innerHTML = lines.map((l, i) => '<span class="ld-ln' + (i === mark ? ' ld-chg' : '') + '">' + hl(l) +
+          (i === caret ? '<span class="ld-caret"></span>' : '') + '</span>').join('\\n');
+        const at = mark != null ? mark : caret;
+        const el = at != null && at >= 0 ? src.children[at] : null;
+        src.scrollTop = el ? Math.max(0, el.offsetTop - src.clientHeight * (mark != null ? 0.45 : 0.7)) : src.scrollHeight;
+      }
+      function show(h) {                    // a prepared state, with "+ new task" under task lists like on the page
+        view.innerHTML = data.states[h].map((i) => data.pieces[i]).join('');
+        view.querySelectorAll('ul.task-list').forEach((ul) => {
+          if (ul.parentElement.closest('.task-list')) return;
+          const li = document.createElement('li'); li.className = 'task-add';
+          const f = document.createElement('form'); f.className = 'task-add';
+          const inp = document.createElement('input'); inp.placeholder = T.new_task;
+          f.append(inp); li.append(f); ul.append(li);
+        });
+        widgets();
+      }
+      let opened = [];
+      function widgets() {
+        const demoSys = [...view.querySelectorAll('.sys[data-demo]')];
+        if (demoSys.length) renderSys(demoSys, DEMO_SYS());
+        if (view.querySelector('.hist-box')) hist();
+        copyButtons();
+        const folds = view.querySelectorAll('details');
+        opened.forEach((n) => { if (folds[n - 1]) folds[n - 1].open = true; });
+      }
+      const finalLines = (sc) => sc.steps.reduce((ls, st) => st.k === 'line' ? ls.concat([st.text]) : st.src.slice(), []);
+      if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        draw(finalLines(data.scenes[0])); btn.hidden = true; return;
+      }
+      // typing speed: the lines of a scene take about `seconds`
+      const per = (sc) => {
+        const ls = sc.steps.filter((s) => s.k === 'line');
+        const chars = ls.reduce((n, s) => n + s.text.length, 0) || 1;
+        return Math.max(12, Math.min(90, (data.seconds * 1000 - ls.length * 160) / chars));
+      };
+      async function moveTo(el, fx, fy) {
+        const r = el.getBoundingClientRect(), s = stage.getBoundingClientRect();
+        mouse.style.transform = 'translate(' + (r.left - s.left + r.width * (fx == null ? 0.5 : fx)) + 'px,' +
+          (r.top - s.top + r.height * (fy == null ? 0.5 : fy)) + 'px)';
+        mouse.classList.add('on');
+        await wait(850);
+      }
+      async function click() {
+        mouse.classList.add('down');
+        const r = document.createElement('span');
+        r.className = 'ld-ripple'; r.style.transform = mouse.style.transform;
+        stage.append(r); setTimeout(() => r.remove(), 600);
+        await wait(160); mouse.classList.remove('down'); await wait(200);
+      }
+      async function typeInto(ta, text, ms) {
+        ta.value += '\\n';
+        for (const ch of text) {
+          ta.value += ch; ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 2 + 'px';
+          await wait(ms * (0.6 + Math.random() * 0.8));
+        }
+      }
+      function apply(st) {                  // the page saved the change: file and preview in sync
+        show(st.h);
+        draw(st.src, -1, st.at);
+        saved.textContent = data.saved;
+        saved.classList.add('on'); win.classList.add('ld-sync');
+        setTimeout(() => { saved.classList.remove('on'); win.classList.remove('ld-sync'); }, 1800);
+      }
+      async function act(st, ms) {
+        if (st.k === 'hover') {               // a hint: the mouse rests on [?]
+          const el = view.querySelectorAll('.tip')[st.n - 1];
+          if (el) { await moveTo(el); el.classList.add('ld-show'); await wait(2600); el.classList.remove('ld-show'); }
+          return;
+        }
+        if (st.k === 'open') {                // a folded callout opens
+          const d = view.querySelectorAll('details')[st.n - 1];
+          if (d) { await moveTo(d.querySelector('summary'), 0.15, 0.5); await click(); d.open = !d.open; opened.push(st.n); await wait(2200); }
+          return;
+        }
+        if (st.k === 'copy') {                // the copy button of a code block
+          const box = view.querySelectorAll('div.highlight')[st.n - 1];
+          const b = box && box.querySelector('.copy-btn');
+          if (b) {
+            box.classList.add('ld-hover'); await moveTo(b); await click();
+            b.classList.add('done'); b.title = T.copied; await wait(1600);
+            b.classList.remove('done'); box.classList.remove('ld-hover');
+          }
+          return;
+        }
+        if (st.k === 'add') {
+          const lists = [...view.querySelectorAll('ul.task-list')].filter((u) => !u.parentElement.closest('.task-list'));
+          const inp = lists[st.n - 1] && lists[st.n - 1].querySelector('li.task-add input');
+          if (inp) {
+            await moveTo(inp, 0.25, 0.5); await click(); inp.classList.add('ld-focus');
+            for (const ch of st.text) { inp.value += ch; await wait(ms * (0.6 + Math.random() * 0.8)); }
+            await wait(450);
+          }
+        } else if (st.k === 'tick') {
+          const el = view.querySelectorAll('input[type=checkbox]')[st.n - 1];
+          if (el) { await moveTo(el); await click(); el.checked = !el.checked; await wait(450); }
+        } else if (st.k === 'note') {
+          const ta = view.querySelectorAll('textarea.note-area')[st.n - 1];
+          if (ta) {
+            await moveTo(ta, 0.3, 0.75); await click();
+            ta.classList.add('ld-focus'); await typeInto(ta, st.text, ms); await wait(500);
+          }
+        } else {
+          const sec = view.querySelectorAll('section.editable')[st.n - 1];
+          const b = sec && sec.querySelector('.block-edit');
+          if (b) {
+            sec.classList.add('ld-hover'); await moveTo(b); await click();
+            const body = sec.querySelector(':scope > .block-body');
+            const f = document.createElement('form'); f.className = 'block-form';
+            const ta = document.createElement('textarea'); ta.className = 'block-src'; ta.value = sec.dataset.src;
+            const bar = document.createElement('div'); bar.className = 'block-bar';
+            const cancel = document.createElement('button'); cancel.type = 'button'; cancel.textContent = data.cancel;
+            const save = document.createElement('button'); save.type = 'button'; save.className = 'primary'; save.textContent = data.save;
+            bar.append(document.createElement('small'), cancel, save); f.append(ta, bar);
+            if (body) { body.hidden = true; body.after(f); } else sec.append(f);
+            sec.classList.add('editing');
+            ta.style.height = ta.scrollHeight + 2 + 'px';
+            await moveTo(ta, 0.4, 0.85);
+            await typeInto(ta, st.text, ms); await wait(400);
+            await moveTo(save); await click();
+          }
+        }
+        apply(st);
+        await wait(1100);
+      }
+      // the editor's suggestions, played in the window: a trigger, the list, the arrow, Enter
+      const sgBox = document.createElement('div');
+      sgBox.className = 'sg-box ld-sg'; sgBox.hidden = true; win.append(sgBox);
+      function plan(text) {
+        if (typeof window.suggestItems !== 'function') return null;
+        const S = window.suggestItems((window.H6082_SUGGEST || {}).lang === 'cs');
+        let m, typed, items, want, jump;
+        if ((m = /^(#{1,3}[+\\-_*]*)(\\s|$)/.exec(text))) {
+          typed = m[1].slice(0, 2); items = S.COLS; want = m[1] + ' ';
+          jump = Math.min(text.length, m[1].length + 1);
+        } else if ((m = /^> \\[!(\\w+)\\](-?)/.exec(text))) {
+          typed = '> [!' + m[1][0]; items = S.CALL; want = '> [!' + m[1] + ']' + (m[2] ? '- ' : ' ');
+          jump = Math.min(text.length, want.length);
+        } else if ((m = /^\\{\\{(\\w+)/.exec(text))) {
+          typed = '{{' + m[1].slice(0, 2); items = S.SC; want = '{{' + m[1]; jump = text.length;
+        } else return null;
+        const list = items.filter((x) => x.text.startsWith(typed));
+        const sel = list.findIndex((x) => x.text.replace(/§/g, '').startsWith(want));
+        return sel < 0 ? null : {kind: want, typed: typed.length, list, sel, jump};
+      }
+      async function suggestShow(p) {
+        const row = (x, i) => '<div class="sg-item' + (i === p.at ? ' on' : '') + '"><code>' +
+          esc(x.text.replace(/§/g, '').replace(/\\n[\\s\\S]*/, ' …')) + '</code><small>' + esc(x.desc) + '</small></div>';
+        const paint = () => { sgBox.innerHTML = p.list.slice(0, 7).map(row).join(''); };
+        p.at = 0; paint();
+        const c = src.querySelector('.ld-caret'), w = win.getBoundingClientRect();
+        const r = c ? c.getBoundingClientRect() : w;
+        sgBox.style.left = Math.max(6, Math.min(r.left - w.left, w.width - 300)) + 'px';
+        sgBox.hidden = false;
+        const below = r.bottom - w.top + 4;     // under the caret, or above it when the window ends
+        sgBox.style.top = (below + sgBox.offsetHeight > w.height ? r.top - w.top - sgBox.offsetHeight - 4 : below) + 'px';
+        await wait(650);
+        while (p.at < Math.min(p.sel, 6)) { p.at += 1; paint(); await wait(260); }
+        await wait(450);
+        sgBox.hidden = true;
+      }
+
+      async function scene(sc) {
+        const ms = per(sc);
+        file.textContent = sc.file; view.innerHTML = ''; opened = [];
+        let lines = [''];
+        const shown = new Set();
+        draw(lines, 0); await wait(600);
+        lines = [];
+        for (const st of sc.steps) {
+          if (st.k !== 'line') { await act(st, ms * 1.3); lines = st.src.slice(); continue; }
+          lines.push('');
+          const L = lines.length - 1;
+          const p = shown.size < 4 ? plan(st.text) : null;
+          let from = 0;
+          if (p && !shown.has(p.kind)) {        // a few suggestions per scene, each kind once
+            shown.add(p.kind);
+            for (const ch of st.text.slice(0, p.typed)) { lines[L] += ch; draw(lines, L); await wait(ms * (0.6 + Math.random())); }
+            await suggestShow(p);
+            lines[L] = st.text.slice(0, p.jump); draw(lines, L); from = p.jump;
+            await wait(250);
+          }
+          for (const ch of st.text.slice(from)) { lines[L] += ch; draw(lines, L); await wait(ms * (0.5 + Math.random())); }
+          if (!st.text) draw(lines, L);
+          if (view.dataset.h !== String(st.h)) { show(st.h); view.dataset.h = st.h; }
+          await wait(st.text.trim() ? 130 : 380);
+        }
+        view.dataset.h = '';
+        draw(lines, -1);
+        mouse.classList.remove('on');
+      }
+      btn.addEventListener('click', () => { paused = !paused; btn.textContent = paused ? '▶' : '❚❚'; });
+      if (window.IntersectionObserver) {
+        new IntersectionObserver((es) => { visible = es[0].isIntersecting; }).observe(box);
+      }
+      (async () => {
+        for (;;) {
+          for (const sc of data.scenes) { await scene(sc); await wait(2600); }
+          await wait(1400);
+        }
+      })();
+    });
+  }
+
   function init() {
-    emails(); checks(); rss(); sys(); hist(); tasksUi(); copyButtons();
+    emails(); checks(); rss(); sys(); hist(); tasksUi(); copyButtons(); livedemos();
     document.querySelectorAll('textarea.note-area').forEach(grow);
   }
   if (CHECK_S > 0) setInterval(checks, CHECK_S * 1000);
@@ -2063,10 +2335,100 @@ window.h6082 = (() => {
 })();
 </script>"""
 
+# Demo mode (H6082_DEMO): the visitor's edits live in localStorage under "h6082-demo:<file id>".
+# A page with a local copy is re-rendered by POST /api/render; controls marked data-demo-off do
+# nothing (they are shown dimmed with a hint).
+DEMO_JS = """<script nonce="__NONCE__">
+window.h6082Demo = (() => {
+  const T = __T__;
+  const P = 'h6082-demo:';
+  const get = (k) => { try { return localStorage.getItem(P + k); } catch (e) { return null; } };
+  const keys = () => { try { return Object.keys(localStorage).filter((k) => k.startsWith(P)); } catch (e) { return []; } };
+  function count() {
+    const el = document.querySelector('.demo-count');
+    if (!el) return;
+    const n = keys().length;
+    el.textContent = n ? T.demo_changed.replace('{n}', n) : '';
+  }
+  function set(k, v) { try { localStorage.setItem(P + k, v); } catch (e) { /* storage blocked: edit lasts for the page only */ } count(); }
+  function reset() {
+    if (!confirm(T.demo_reset_confirm)) return;
+    keys().forEach((k) => { try { localStorage.removeItem(k); } catch (e) {} });
+    location.reload();
+  }
+  async function render() {
+    const rows = document.querySelector('[data-fid]');
+    if (!rows) return;
+    const doc = get(rows.dataset.fid);
+    if (doc === null) return;
+    const q = new URLSearchParams(location.search);
+    const r = await fetch('/api/render', {method: 'POST', cache: 'no-store',
+      headers: {'X-H6082': '1', 'Content-Type': 'application/json'},
+      body: JSON.stringify({name: rows.dataset.tab, doc, embed: q.get('embed') === '1', lang: q.get('lang') || ''})});
+    if (!r.ok) return;
+    const m = new DOMParser().parseFromString(await r.text(), 'text/html').querySelector('main');
+    if (m) document.querySelector('main').replaceWith(m);
+    if (window.h6082 && window.h6082.init) window.h6082.init();
+    count();
+  }
+  for (const ev of ['click', 'submit']) {
+    document.addEventListener(ev, (e) => {
+      if (!e.target.closest('[data-demo-off]')) return;
+      e.preventDefault(); e.stopImmediatePropagation();
+    }, true);
+  }
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('[data-demo-reset]')) { e.preventDefault(); reset(); }
+  });
+  count();
+  render();
+  return {get, set, render, count};
+})();
+</script>"""
+
 # Smart typing in the editor textarea: auto-paired brackets and quotes, list / quote
 # continuation on Enter, ``` fences, Tab / Shift+Tab indentation. Edits go through
 # execCommand('insertText') so Ctrl+Z keeps working. Markdown rules only for .md files.
 SMART_JS = r"""
+// what the editor suggests (also shown by {{livedemo}}); cs = Czech descriptions
+function suggestItems(cs) {
+  const L = (en, cz) => cs ? cz : en;
+  const it = (text, desc, eat) => ({text, desc, eat});
+  const COLS = [
+    it('# ', L('column', 'sloupec')), it('#+ ', L('column 1.5× wide', 'sloupec 1,5× širší')),
+    it('#++ ', L('column 2× wide', 'sloupec 2× širší')), it('#- ', L('column 0.5×', 'sloupec 0,5×')),
+    it('#-- ', L('column 0.25×', 'sloupec 0,25×')), it('#__ ', L('full-width row', 'pás přes celou šířku')),
+    it('## ', L('block', 'blok')), it('##* ', L('block editable on the page', 'blok upravitelný na stránce')),
+    it('## `§title§`', L('column heading, no frame', 'nadpis sloupce bez rámečku')),
+    it('### ', L('subheading', 'podnadpis')),
+  ];
+  const SC = [
+    it('{{rss §URL§ 5}}', L('RSS feed', 'RSS feed')),
+    it('{{sys cpu mem disk}}', L('server status', 'stav serveru')),
+    it('{{history 10}}', L('recent changes', 'poslední změny')),
+    it('{{note}}\n§\n{{/note}}', L('note editable on the page', 'poznámka upravitelná na stránce')),
+    it('{{email §name§ domain}}', L('protected e-mail', 'chráněný e-mail')),
+    it('{{files}}', L('list of files', 'seznam souborů')),
+    it('{{newfile}}', L('new file form', 'formulář pro nový soubor')),
+    it('{{theme}}', L('theme picker', 'výběr motivu')),
+    it('{{lang}}', L('language switch', 'přepínač jazyka')),
+    it('{{livedemo 30}}\n§\n{{/livedemo}}', L('animated editor demo', 'animovaná ukázka editoru')),
+  ];
+  const CALL = [['tip', L('green hint', 'zelený tip')], ['note', L('blue note', 'modrá poznámka')],
+    ['info', L('info', 'informace')], ['warning', L('warning', 'varování')], ['danger', L('danger', 'nebezpečí')],
+    ['success', L('done, OK', 'hotovo, v pořádku')], ['example', L('example', 'příklad')],
+    ['quote', L('quote', 'citace')], ['question', L('question', 'otázka')]]
+    .flatMap(([k, d]) => [it('> [!' + k + '] ', d), it('> [!' + k + ']- ', d + L(', folded', ', sbalený'))]);
+  const CLS = [['.check', L('status dot of a link', 'tečka stavu odkazu')], ['.center', L('centred', 'na střed')],
+    ['.right', L('to the right', 'doprava')], ['.big', L('bigger text', 'větší písmo')], ['.huge', L('huge text', 'velké písmo')],
+    ['.small', L('smaller text', 'menší písmo')], ['.muted', L('muted colour', 'tlumená barva')],
+    ['.fill', L('block fills the column height', 'blok vyplní výšku sloupce')]].map(([k, d]) => it(k, d));
+  const LANGS = ['bash', 'python', 'toml', 'json', 'yaml', 'js', 'html', 'css', 'sql', 'text']
+    .map((k) => it('```' + k, L('code block', 'blok kódu')));
+  const TASK = [it('[ ] ', L('task', 'úkol')), it('[x] ', L('done task', 'hotový úkol'))];
+  return {COLS, SC, CALL, CLS, LANGS, TASK, L};
+}
+
 function smartEditor(ta, MD) {
   const PAIRS = {'(': ')', '[': ']', '{': '}', '<': '>', '"': '"', "'": "'", '`': '`'};
   const CLOSERS = new Set(Object.values(PAIRS));
@@ -2237,6 +2599,119 @@ function smartEditor(ta, MD) {
     put('[' + sel + ']()', s, en, sel ? sel.length + 3 : 1);
   }
 
+  // ---- suggestions while typing: after a trigger (# at the line start, {{, > [!, {., ](/, - [, ```)
+  // a small list under the caret; arrows choose, Enter / Tab confirm, Esc closes
+  function suggester() {
+    const C = window.H6082_SUGGEST || {};
+    if (C.off || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches)) return;
+    const {COLS, SC, CALL, CLS, LANGS, TASK, L} = suggestItems(C.lang === 'cs');
+    const it = (text, desc) => ({text, desc});
+
+    // what the text before the caret asks for: {from, items, eat}
+    function context(v, s) {
+      const ls = lineStart(v, s), before = v.slice(ls, s);
+      let fence = false;
+      for (const l of v.slice(0, ls).split('\n')) if (FENCE.test(l)) fence = !fence;
+      let m;
+      if ((m = /^```(\w*)$/.exec(before))) return {from: ls, q: before, items: fence ? [] : LANGS};
+      if (fence) return null;
+      if ((m = /^#{1,3}[+\-_*]*$/.exec(before))) return {from: ls, q: before, items: COLS};
+      if ((m = /\{\{(\w*)$/.exec(before))) return {from: s - m[0].length, q: m[0], items: SC, eat: /^\}{1,2}/};
+      if ((m = /^>\s?\[!(\w*\]?-?)$/.exec(before))) return {from: ls, q: '> [!' + m[1], items: CALL, eat: /^\]/};
+      if ((m = /\{:?\s*(\.[\w-]*)$/.exec(before))) return {from: s - m[1].length, q: m[1], items: CLS};
+      if ((m = /\]\((\/[\w.-]*)$/.exec(before))) {
+        const pages = (C.pages || []).map((p) => it('/' + p, L('page', 'stránka')));
+        return {from: s - m[1].length, q: m[1], items: pages};
+      }
+      if ((m = /^\s*[-*+] (\[[ xX]?)$/.exec(before))) return {from: s - m[1].length, q: m[1], items: TASK, eat: /^\]/};
+      return null;
+    }
+
+    const box = document.createElement('div');
+    box.className = 'sg-box'; box.hidden = true; box.setAttribute('role', 'listbox');
+    document.body.append(box);
+    let cur = null, sel = 0, busy = false;
+
+    // caret position: a hidden copy of the textarea with the same metrics
+    function caretXY() {
+      const st = getComputedStyle(ta), m = document.createElement('div');
+      for (const p of ['boxSizing', 'width', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
+        'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'fontFamily', 'fontSize',
+        'fontWeight', 'lineHeight', 'letterSpacing', 'tabSize', 'whiteSpace', 'overflowWrap', 'wordBreak'])
+        m.style[p] = st[p];
+      Object.assign(m.style, {position: 'absolute', visibility: 'hidden', top: '0', left: '-9999px', whiteSpace: 'pre-wrap'});
+      m.textContent = ta.value.slice(0, ta.selectionStart);
+      const mark = document.createElement('span'); mark.textContent = '​'; m.append(mark);
+      document.body.append(m);
+      const r = ta.getBoundingClientRect();
+      const xy = {x: r.left + mark.offsetLeft - ta.scrollLeft, y: r.top + mark.offsetTop - ta.scrollTop + mark.offsetHeight};
+      m.remove();
+      return xy;
+    }
+    const close = () => { box.hidden = true; cur = null; };
+    function render() {
+      box.replaceChildren(...cur.list.map((x, i) => {
+        const row = document.createElement('div');
+        row.className = 'sg-item' + (i === sel ? ' on' : ''); row.setAttribute('role', 'option');
+        const c = document.createElement('code'); c.textContent = x.text.replace(/§/g, '').replace(/\n[\s\S]*/, ' …');
+        const d = document.createElement('small'); d.textContent = x.desc;
+        row.append(c, d);
+        row.addEventListener('mousedown', (e) => { e.preventDefault(); sel = i; accept(); });
+        return row;
+      }));
+      const on = box.children[sel];
+      if (on && on.scrollIntoView) on.scrollIntoView({block: 'nearest'});
+    }
+    function update() {
+      if (busy || ta.selectionStart !== ta.selectionEnd) return close();
+      const v = ta.value, s = ta.selectionStart, c = context(v, s);
+      if (!c) return close();
+      const q = c.q.toLowerCase();
+      const list = c.items.filter((x) => x.text.toLowerCase().startsWith(q) && x.text.replace(/§/g, '') !== c.q);
+      if (!list.length) return close();
+      const same = cur && cur.from === c.from && cur.list.length === list.length;
+      cur = {...c, list}; if (!same) sel = 0;
+      sel = Math.min(sel, list.length - 1);
+      render();
+      const p = caretXY();
+      box.hidden = false;
+      box.style.left = Math.max(4, Math.min(p.x, innerWidth - box.offsetWidth - 8)) + 'px';
+      box.style.top = (p.y + box.offsetHeight + 8 > innerHeight ? p.y - box.offsetHeight - 22 : p.y + 4) + 'px';
+    }
+    function accept() {
+      const x = cur.list[sel], v = ta.value, s = ta.selectionStart;
+      let to = s;
+      if (cur.eat) { const m = cur.eat.exec(v.slice(s)); if (m) to += m[0].length; }
+      const a = x.text.indexOf('§'), b = a < 0 ? -1 : x.text.indexOf('§', a + 1);
+      const text = x.text.replace(/§/g, '');
+      busy = true; skip = true;
+      put(text, cur.from, to, a < 0 ? text.length : a, a < 0 ? text.length : b < 0 ? a : b - 1);
+      busy = false;
+      close();
+    }
+    // checked a moment later: an automatic pair ({ -> {}) places the caret only after the input event
+    let skip = false, timer = 0;
+    const later = () => { clearTimeout(timer); timer = setTimeout(() => { if (skip) skip = false; else update(); }, 0); };
+    ta.addEventListener('input', later);
+    ta.addEventListener('blur', () => setTimeout(close, 100));
+    ta.addEventListener('scroll', close);
+    ta.addEventListener('click', later);
+    ta.addEventListener('keyup', (e) => { if (/^(ArrowLeft|ArrowRight|Home|End)$/.test(e.key)) later(); });
+    ta.addEventListener('keydown', (e) => {
+      if (!cur || box.hidden || e.isComposing) return;
+      const n = cur.list.length;
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault(); e.stopImmediatePropagation();
+        sel = (sel + (e.key === 'ArrowDown' ? 1 : n - 1)) % n; render();
+      } else if ((e.key === 'Enter' || e.key === 'Tab') && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault(); e.stopImmediatePropagation(); accept();
+      } else if (e.key === 'Escape') {
+        e.preventDefault(); e.stopImmediatePropagation(); close();
+      }
+    });
+  }
+  if (MD) suggester();
+
   // letters by e.key (any Latin layout), e.code as a fallback for other scripts
   const letter = (e) => {
     const k = (e.key || '').toLowerCase();
@@ -2401,8 +2876,15 @@ function highlighter(ta, pre, mode) {
   function sync() { pre.scrollTop = ta.scrollTop; pre.scrollLeft = ta.scrollLeft; }
   ta.addEventListener('input', () => { if (!queued) { queued = true; requestAnimationFrame(paint); } });
   ta.addEventListener('scroll', sync);
-  new ResizeObserver(sync).observe(ta);
+  if (window.ResizeObserver && window.Element && ta instanceof Element) new ResizeObserver(sync).observe(ta);
   return paint;
+}
+
+// coloured HTML for a piece of markdown / TOML (used by {{livedemo}})
+function highlightText(text, mode) {
+  const pre = {innerHTML: '', scrollTop: 0, scrollLeft: 0};
+  highlighter({value: text, scrollTop: 0, scrollLeft: 0, addEventListener() {}}, pre, mode)();
+  return pre.innerHTML.replace(/\n $/, '');
 }
 
 // Editor layout: draggable divider between the editor and the preview (double-click = half,
@@ -2486,6 +2968,8 @@ __SMART__
       const j = await r.json();
       if (!r.ok) { set(T.err + j.error, 'err'); ta.disabled = true; return; }
       ta.value = saved = j.text; mtime = j.mtime; blocked = false; cf.hidden = true; ta.disabled = false;
+      const local = T.demo && window.h6082Demo ? window.h6082Demo.get(NAME) : null;
+      if (local !== null) ta.value = saved = local;   // demo: the visitor's own copy
       paint();
       set(j.warning ? '⚠ ' + j.warning : T.loaded, j.warning ? 'warn' : 'ok');
       ta.focus();
@@ -2497,6 +2981,15 @@ __SMART__
   async function save(force) {
     clearTimeout(timer);
     if (gone || (blocked && !force)) return;
+    if (T.demo) {   // demo: keep it in this browser, refresh the preview
+      if (!dirty() && !force) return;
+      saved = ta.value;
+      window.h6082Demo.set(NAME, saved);
+      set(T.demo_saved + ' ' + new Date().toLocaleTimeString(T.locale), 'ok');
+      const fr = document.querySelector('.ed-panes iframe');
+      if (fr && fr.contentWindow) fr.contentWindow.location.reload();
+      return;
+    }
     if (saving) { again = true; return; }
     if (!dirty() && !force) return;
     saving = true; again = false;
@@ -2608,6 +3101,10 @@ def favicon(cfg):
 
 
 def page(cfg, title, body, scripts="", body_class=""):
+    if DEMO:
+        body = (f'<div class="demo-bar"><span>{t(cfg, "demo_bar")}</span><span class="demo-count"></span>'
+                f'<button type="button" data-demo-reset>{t(cfg, "demo_reset")}</button></div>' + body)
+        scripts = DEMO_JS + scripts
     scripts = scripts.replace("__NONCE__", NONCE_PH).replace("__T__", js_strings(cfg))
     theme_js = THEME_JS.replace("__NONCE__", NONCE_PH).replace("__T__", js_strings(cfg))
     return f"""<!doctype html>
@@ -2686,15 +3183,21 @@ def tab_bar(cfg, tabs, active, live=True):
 # The n-th checkbox on the page = the n-th task line in the file.
 
 NOTE_OPEN, NOTE_CLOSE = "{{note}}", "{{/note}}"
+LD_OPEN_RE = re.compile(r"^\{\{\s*livedemo(?:\s+(\d{1,3}))?\s*\}\}$")   # {{livedemo [seconds]}}
+LD_CLOSE = "{{/livedemo}}"
 TASK_LINE_RE = re.compile(r"^(\s*(?:>\s?)*\s*(?:[-*+]|\d+[.)])\s+)\[([ xX])\](\s.*)?$")
 CHECKBOX_RE = re.compile(r'<input type="checkbox" disabled( checked)?/>')
 
 
 def source_lines(text):
-    """(number, line, kind): kind = code | note | marker | normal."""
-    fence, in_note = None, False
+    """(number, line, kind): kind = code | note | marker | normal. A {{livedemo}} block counts as code."""
+    fence, in_note, in_ld = None, False, False
     for i, line in enumerate(text.split("\n")):
         s = line.strip()
+        if in_ld:
+            in_ld = s != LD_CLOSE
+            yield i, line, "code"
+            continue
         if in_note:
             if s == NOTE_CLOSE:
                 in_note = False
@@ -2715,6 +3218,10 @@ def source_lines(text):
         if s == NOTE_OPEN:
             in_note = True
             yield i, line, "marker"
+            continue
+        if LD_OPEN_RE.match(s):
+            in_ld = True
+            yield i, line, "code"
             continue
         yield i, line, "normal"
 
@@ -2791,6 +3298,215 @@ def note_ranges(text):
     return out
 
 
+def extract_livedemos(cfg, text):
+    """{{livedemo [s]}} … {{/livedemo}}: an editor window that types the markdown inside line by
+    line while a preview below shows the rendered page. Every preview state is rendered here, so the
+    browser only swaps prepared HTML (no server calls, works in read-only mode). Returns the text
+    with placeholder lines and {placeholder: html}."""
+    lines, out, tokens, i = text.split("\n"), [], {}, 0
+    fence = None
+    while i < len(lines):
+        line = lines[i]
+        m = FENCE_RE.match(line)
+        if fence:
+            if m and m.group(1)[0] == fence[0] and len(m.group(1)) >= len(fence):
+                fence = None
+        elif m:
+            fence = m.group(1)
+        elif (lm := LD_OPEN_RE.match(line.strip())):
+            end = next((j for j in range(i + 1, len(lines)) if lines[j].strip() == LD_CLOSE), len(lines))
+            body = lines[i + 1:end]
+            tok = f"H6082LIVE{len(tokens)}X{secrets.token_hex(4)}"
+            tokens[tok] = livedemo_html(cfg, body, int(lm.group(1) or 30))
+            out += ["", tok, ""]
+            i = end + 1
+            continue
+        out.append(line)
+        i += 1
+    return "\n".join(out), tokens
+
+
+LD_SCENE_RE = re.compile(r"^\{\{\s*scene(?:\s+(\S+))?\s*\}\}$")                 # {{scene file.md}}
+LD_ACT_RE = re.compile(r"^\{\{\s*(tick|add|note|edit|hover|open|copy)\s+(\d{1,2})(?:\s+(.*?))?\s*\}\}$")  # {{tick 2}} …
+LD_CACHE = {}
+LD_LOOK = ("hover", "open", "copy")     # mouse actions that only show something, the file stays
+# made-up feed items for the preview (a demo should not depend on someone else's server)
+LD_FEEDS = {
+    "ycombinator": ["Show HN: A start page in one markdown file", "SQLite is enough for most side projects",
+                    "The unreasonable effectiveness of plain text", "A visual guide to SSH tunnels",
+                    "Ask HN: What do you self-host in 2026?"],
+    "toprecepty": ["Dýňová polévka s pečeným česnekem", "Kynuté švestkové knedlíky", "Houbové rizoto za 25 minut",
+                   "Pečená zelenina s tahini"],
+    "smashing": ["Designing accessible forms that don't annoy", "Variable fonts in production",
+                 "A practical guide to design tokens", "Colour contrast beyond WCAG"],
+    "sagepub": ["Young people and online participation: a panel study", "Measuring political efficacy across Europe",
+                "Platform affordances and civic talk"],
+    "sans": ["Scanning for exposed Docker APIs continues", "Phishing kit abuses calendar invites",
+             "Stormcast: Patch Tuesday roundup"],
+    "bbcgoodfood": ["Roasted pumpkin soup with garlic", "One-pot mushroom risotto", "Sheet-pan vegetables with tahini",
+                    "Plum crumble in 30 minutes"],
+}
+LD_FEED_ANY = {"cs": ["Novinka týdne: co se změnilo", "Návod: zálohy, které opravdu obnovíte", "Rozhovor: deset let na volné noze"],
+               "en": ["This week: what changed", "How to: backups you can actually restore", "Interview: ten years freelancing"]}
+
+
+def _ld_feed(cfg, args):
+    url = args[0] if args else ""
+    n = int(args[1]) if len(args) > 1 and args[1].isdigit() else 4
+    items = next((v for k, v in LD_FEEDS.items() if k in url), LD_FEED_ANY.get(cur_lang(cfg), LD_FEED_ANY["en"]))[:n]
+    ago = ["12 min", "1 h", "3 h", "5 h", "1 d"]
+    li = "".join(f'<li><a href="{html.escape(url)}">{html.escape(x)}</a><small> {ago[i % 5]}</small>'
+                 + ('<a class="rss-c" href="#"> 💬</a>' if "ycombinator" in url else "") + "</li>"
+                 for i, x in enumerate(items))
+    return f'<div class="rss"><ul class="rss-list">{li}</ul></div>'
+
+
+def _ld_check(m):
+    """A made-up result for a status dot: up, or warn / down when the link has that class."""
+    tag = m.group(0)
+    state = "down" if re.search(r'class="[^"]*\bdown\b', tag) else "warn" if re.search(r'class="[^"]*\bwarn\b', tag) else "up"
+    info = {"up": "200 · 84 ms", "warn": "200 · 1840 ms", "down": "timeout"}[state]
+    return re.sub(r' data-check="([^"]*)"', lambda c: f' data-check="{c.group(1)}" data-state="{state}" title="{c.group(1)}\n{state} · {info}"', tag)
+
+
+def _ld_render(cfg, md, text):
+    """One preview state: notes (read-only) and ##* blocks with ✎ like on a real page, no
+    shortcodes, ids and live checks removed so nothing clashes with the page around."""
+    body, notes = extract_notes(cfg, text, "", False)
+    out = []                          # live widgets: RSS, and server / history always with made-up data
+    for line, outside in iter_lines_with_fence(body):
+        m = SHORTCODE_RE.match(line.strip()) if outside else None
+        name, args = (m.group(1), m.group(2).split()) if m else (None, [])
+        if name == "rss":
+            out += ["", _ld_feed(cfg, args), ""]
+        elif name == "sys":
+            out += ["", sys_box(cfg, args + ["demo"]), ""]
+        elif name == "history":
+            out += ["", history_box(cfg, [a for a in args if a.isdigit()] + ["demo"]), ""]
+        else:
+            out.append(inline_shortcodes(line, cfg) if outside else line)
+    cols = layout_html(md, split_columns("\n".join(out), cfg["markdown"]["line_breaks"]))
+    for tok, h in notes.items():
+        cols = cols.replace(f"<p>{tok}</p>", h)
+    cols = finish_edit_blocks(cfg, cols, text, True)
+    cols = re.sub(r'<a [^>]*data-check="[^"]*"[^>]*>', _ld_check, postprocess(cols, cfg))
+    return re.sub(r' id="[^"]*"', "", cols)
+
+
+def _ld_act(src, kind, n, arg):
+    """Applies a page action to the scene source: returns (new lines, changed line) or None."""
+    text = "\n".join(src)
+    if kind == "tick":
+        idx = task_lines(text)
+        if n > len(idx):
+            return None
+        i = idx[n - 1]
+        line = src[i]
+        new = re.sub(r"\[( |x|X)\]", lambda m: "[ ]" if m.group(1) != " " else "[x]", line, count=1)
+        return src[:i] + [new] + src[i + 1:], i
+    if kind == "add":                 # a new task at the end of the n-th task list
+        groups = []
+        for i in task_lines(text):
+            if groups and groups[-1][-1] == i - 1:
+                groups[-1].append(i)
+            else:
+                groups.append([i])
+        if n > len(groups):
+            return None
+        end = groups[n - 1][-1] + 1
+        return src[:end] + [f"- [ ] {arg}"] + src[end:], end
+    if kind == "note":
+        rng = note_ranges(text)
+        if n > len(rng):
+            return None
+        end = rng[n - 1][1]
+        return src[:end] + [arg] + src[end:], end
+    ranges = edit_block_ranges(text)
+    if n > len(ranges):
+        return None
+    end = ranges[n - 1][1]
+    return src[:end] + [arg] + src[end:], end
+
+
+def livedemo_html(cfg, body, seconds):
+    """Scenes ({{scene file.md}}) of lines typed in the window and page actions ({{tick n}},
+    {{note n text}}, {{edit n text}}) played with a mouse in the preview. Every state is
+    rendered here; the browser only swaps prepared HTML."""
+    key = (cur_lang(cfg), cfg["markdown"]["line_breaks"], seconds, "\n".join(body))
+    if key in LD_CACHE:
+        return LD_CACHE[key]
+    md = make_md(cfg)
+    snaps, scenes = [], []
+
+    def snap(lines):
+        h = _ld_render(cfg, md, "\n".join(lines))
+        if not snaps or snaps[-1] != h:
+            snaps.append(h)
+        return len(snaps) - 1
+
+    scene = None
+    for line in body + [None]:
+        sm = LD_SCENE_RE.match(line.strip()) if line is not None else None
+        if line is None or sm or scene is None:
+            if scene is not None:
+                while scene["steps"] and scene["steps"][-1]["k"] == "line" and not scene["steps"][-1]["text"].strip():
+                    scene["steps"].pop()
+                if scene["steps"]:
+                    scenes.append(scene)
+            if line is None:
+                break
+            scene, src = {"file": (sm.group(1) if sm and sm.group(1) else "demo.md"), "steps": []}, []
+            if sm:
+                continue
+        am = LD_ACT_RE.match(line.strip())
+        if am and am.group(1) in LD_LOOK:
+            if scene["steps"]:
+                scene["steps"].append({"k": am.group(1), "n": int(am.group(2)), "text": "", "src": src,
+                                       "at": None, "h": scene["steps"][-1]["h"]})
+            continue
+        if am:
+            r = _ld_act(src, am.group(1), int(am.group(2)), am.group(3) or "")
+            if r is None:
+                continue
+            src, at = r
+            scene["steps"].append({"k": am.group(1), "n": int(am.group(2)), "text": am.group(3) or "",
+                                   "src": src, "at": at, "h": snap(src)})
+            continue
+        src = src + [line]
+        prev = scene["steps"][-1]["h"] if scene["steps"] else None
+        h = snap(src) if line.strip() or prev is None else prev   # an empty line does not change the page
+        scene["steps"].append({"k": "line", "text": line, "h": h})
+    # the states share most blocks: each state is a list of pieces, every piece stored once
+    pool, index, states = [], {}, []
+    for h in snaps:
+        ids = []
+        for piece in re.split(r'(?=<section class="block)|(?<=</section>)', h):
+            if piece not in index:
+                index[piece] = len(pool)
+                pool.append(piece)
+            ids.append(index[piece])
+        states.append(ids)
+    data = json.dumps({"scenes": scenes, "pieces": pool, "states": states, "seconds": max(5, min(seconds, 300)),
+                       "save": t(cfg, "js_block_save"), "cancel": t(cfg, "js_block_cancel"),
+                       "saved": t(cfg, "ld_saved")}, ensure_ascii=False)
+    data = data.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
+    final = snaps[scenes[0]["steps"][-1]["h"]] if scenes else ""
+    first = html.escape(scenes[0]["file"]) if scenes else "demo.md"
+    out = (f'<div class="livedemo" role="img" aria-label="{t(cfg, "ld_aria")}">'
+           f'<div class="ld-win"><div class="ld-bar"><i></i><i></i><i></i><span class="ld-file">{first}</span>'
+           f'<em class="ld-saved"></em>'
+           f'<button type="button" class="ld-toggle" title="{t(cfg, "ld_pause")}" aria-label="{t(cfg, "ld_pause")}">❚❚</button></div>'
+           f'<pre class="ld-src ed-hl"></pre></div>'
+           f'<div class="ld-stage"><div class="ld-preview" inert>{final}</div>'
+           f'<svg class="ld-mouse" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">'
+           f'<path d="M4 2l15 11-6.5 1 4 7.5-3 1.5-4-7.5L4 20z"/></svg></div>'
+           f'<script type="application/json" class="ld-data">{data}</script></div>')
+    if len(LD_CACHE) > 32:
+        LD_CACHE.clear()
+    LD_CACHE[key] = out
+    return out
+
+
 def extract_notes(cfg, text, fname, editable):
     """Replaces notes with placeholder lines (kept out of markdown) and returns {placeholder: html}."""
     lines, out, tokens = text.split("\n"), [], {}
@@ -2829,20 +3545,32 @@ def number_tasks(cfg, body, count, editable):
     return CHECKBOX_RE.sub(sub, body)
 
 
-def build_tab(cfg, tabs, name, embed):
+def smart_js(cfg):
+    """SMART_JS with the settings for suggestions (on/off, language, page names for links)."""
+    conf = {"off": not cfg["editor"].get("suggest", True), "lang": cur_lang(cfg),
+            "pages": list_tabs(cfg) + ["markdown", "docs", "h6082"]}
+    return "window.H6082_SUGGEST = " + json.dumps(conf, ensure_ascii=False).replace("<", "\\u003c") + ";\n" + SMART_JS
+
+
+def build_tab(cfg, tabs, name, embed, override=None):
     md = make_md(cfg)
     src = page_path(cfg, name)
     fid = file_id(src)
-    raw = src.read_text(encoding="utf-8")
+    raw = src.read_text(encoding="utf-8") if override is None else override
     editable = cfg["editor"]["enabled"] and not is_system(cfg, name) and not embed
-    text, notes = extract_notes(cfg, raw, fid, editable)
+    text, demos = extract_livedemos(cfg, raw)
+    text, notes = extract_notes(cfg, text, fid, editable)
     text = expand_shortcodes(cfg, text)
     cols = layout_html(md, split_columns(text, cfg["markdown"]["line_breaks"]))
     for tok, h in notes.items():
         cols = cols.replace(f"<p>{tok}</p>", h)
     cols = number_tasks(cfg, cols, len(task_lines(raw)), editable)
     cols = finish_edit_blocks(cfg, cols, raw, editable)
+    for tok, h in demos.items():
+        cols = cols.replace(f"<p>{tok}</p>", h)
     attrs = f' data-file="{html.escape(fid)}" data-tasks-sig="{tasks_sig(raw)}"' if editable else ""
+    if DEMO:   # the visitor's local copy is stored under data-fid
+        attrs += f' data-fid="{html.escape(fid)}" data-tab="{html.escape(name)}"'
     bar = "" if embed else tab_bar(cfg, tabs, name)
     body = f'{bar}<div class="rows"{attrs}>{cols}</div>'
     title = cfg["page"]["title"]
@@ -2852,8 +3580,8 @@ def build_tab(cfg, tabs, name, embed):
     sys_s = int(cfg["system"]["interval_s"]) if cfg["system"]["enabled"] else 0
     scripts = (LIVE_JS if cfg["page"]["live_reload"] else "") + \
         PAGE_JS.replace("__CHECK_S__", str(check_s)).replace("__SYS_S__", str(sys_s))
-    if 'class="block editable"' in cols:   # smart typing for the in-place block editor
-        scripts += f'<script nonce="__NONCE__">{SMART_JS}</script>'
+    if 'class="block editable"' in cols or 'class="livedemo"' in cols:   # smart typing / highlighter
+        scripts += f'<script nonce="__NONCE__">{smart_js(cfg)}</script>'
 
     return page(cfg, title, postprocess(body, cfg), scripts, "embed" if embed else "")
 
@@ -2878,7 +3606,7 @@ def editor_langs(cfg, fname, p):
             elif f.is_file():
                 items.append(f'<a class="tab" href="/edit/{quote(f.name)}" title="{f.name}">{label}</a>')
             elif lang and cfg["editor"]["enabled"]:
-                items.append(f'<button type="button" class="tab sub" data-new="{base}.{lang}" '
+                items.append(f'<button type="button" class="tab sub" data-new="{base}.{lang}"{demo_off(cfg)} '
                              f'title="{html.escape(t(cfg, "ed_lang_new_title", f=f.name))}">+ {lang}</button>')
         if sum(1 for f in page_variants(base)) < 2:   # no translations: no language buttons
             return ""
@@ -2904,19 +3632,22 @@ def build_editor(cfg, tabs, fname):
     p = editable_path(fname)
     acts = ""
     if p is not None and p.parent == PAGES:
-        acts = (f'<button id="ren" type="button" class="tab">{t(cfg, "ed_rename")}</button>'
-                f'<button id="del" type="button" class="tab danger" title="{t(cfg, "ed_delete_title")}">{t(cfg, "ed_delete")}</button>')
+        off = demo_off(cfg)
+        del_title = off or f' title="{t(cfg, "ed_delete_title")}"'
+        acts = (f'<button id="ren" type="button" class="tab"{off}>{t(cfg, "ed_rename")}</button>'
+                f'<button id="del" type="button" class="tab danger"{del_title}>{t(cfg, "ed_delete")}</button>')
     elif fname.startswith("system/") and p.is_file() and default_of(p):
-        acts = f'<button id="reset" type="button" class="tab danger">{t(cfg, "ed_reset")}</button>'
+        acts = f'<button id="reset" type="button" class="tab danger"{demo_off(cfg)}>{t(cfg, "ed_reset")}</button>'
     acts = f'<span class="ed-acts">{acts}</span>' if acts else ""
     acts = editor_langs(cfg, fname, p) + acts
     view = (f'<button id="pv" class="tab" type="button" aria-pressed="true" title="{t(cfg, "ed_preview_title")}">'
             f'{t(cfg, "ed_preview")}</button>' if preview else "")
     if stem:
         view += f'<a class="tab" href="/{quote(stem)}?lang={plang}">{t(cfg, "ed_view")}</a>'
-    if cfg["history"]["enabled"]:
-        view += f'<a class="tab" href="/history/{quote(fname)}">{t(cfg, "ed_history")}</a>'
-    help_href = "/docs#format-configu" if fname == "config.toml" else "/docs#editor"
+    if cfg["history"]["enabled"] or DEMO:
+        view += f'<a class="tab" href="/history/{quote(fname)}"{demo_off(cfg)}>{t(cfg, "ed_history")}</a>'
+    cfg_anchor = "format-configu" if cur_lang(cfg) == "cs" else "config-format"
+    help_href = f"/docs#{cfg_anchor}" if fname == "config.toml" else "/docs#editor"
     view += (f'<a class="tab" href="{help_href}" target="_blank" title="{t(cfg, "ed_help_title")}">{t(cfg, "ed_help")}</a>'
              f'<a class="tab" href="/markdown" target="_blank" title="{t(cfg, "ed_md_title")}">markdown ↗</a>')
 
@@ -2938,7 +3669,7 @@ def build_editor(cfg, tabs, fname):
     {iframe}
   </div>
 </div>"""
-    js = EDITOR_JS.replace("__SMART__", SMART_JS).replace("__NAME__", json.dumps(fname)).replace("__BACK__", json.dumps("/" + quote(about))).replace("__DELAY__", str(int(cfg["editor"]["autosave_ms"])))
+    js = EDITOR_JS.replace("__SMART__", smart_js(cfg)).replace("__NAME__", json.dumps(fname)).replace("__BACK__", json.dumps("/" + quote(about))).replace("__DELAY__", str(int(cfg["editor"]["autosave_ms"])))
     return page(cfg, f"✎ {fname} · {cfg['page']['title']}", body, js, "editing")
 
 
@@ -3187,8 +3918,28 @@ def build_history(cfg, tabs, fname, v):
     return page(cfg, f"{t(cfg, 'h_title', name=fname)} · {cfg['page']['title']}", body, HISTORY_JS, "history")
 
 
+_demo_hits, _demo_lock = {}, threading.Lock()
+
+
+def demo_rate_ok(ip, limit=60, window=60.0):
+    """Simple per-IP limit for /api/render (rendering costs CPU; the endpoint is public in demo)."""
+    now = time.monotonic()
+    with _demo_lock:
+        hits = [x for x in _demo_hits.get(ip, []) if now - x < window]
+        ok = len(hits) < limit
+        if ok:
+            hits.append(now)
+        _demo_hits[ip] = hits
+        if len(_demo_hits) > 5000:   # forget idle visitors
+            for k in [k for k, v in _demo_hits.items() if not v or now - v[-1] > window]:
+                del _demo_hits[k]
+        return ok
+
+
 def write_atomic(path, text):
     """Write to a temp file in the same directory + rename: a file is never half-written."""
+    if READONLY:
+        raise PermissionError("read-only mode: nothing is written")
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".", suffix=".part")
     try:
@@ -3606,12 +4357,14 @@ class Handler(BaseHTTPRequestHandler):
     def _json(self, code, obj):
         self._send(code, json.dumps(obj, ensure_ascii=False).encode(), "application/json; charset=utf-8")
 
-    def _api_denied(self, cfg, editor=True):
+    def _api_denied(self, cfg, editor=True, demo_ok=False):
         """API guard: editor enabled, allowed Host/Origin (against DNS rebinding and foreign sites)
         and the custom X-H6082 header (a cross-origin request with it needs a CORS preflight,
         which the server never allows, so the browser blocks it)."""
         if editor and not cfg["editor"]["enabled"]:
             return t(cfg, "err_editor_off")
+        if editor and DEMO and not demo_ok:
+            return t(cfg, "err_demo")
         allowed = allowed_hosts(cfg)
         host = urlsplit("//" + (self.headers.get("Host") or "")).hostname or ""
         if host.lower() not in allowed:
@@ -3717,6 +4470,8 @@ class Handler(BaseHTTPRequestHandler):
             p = editable_path(fname)
             if not cfg["editor"]["enabled"]:
                 code, body = 403, build_message(cfg, tabs, t(cfg, "msg_editor_disabled"))
+            elif DEMO and p == CFG_FILE:
+                code, body = 403, build_message(cfg, tabs, t(cfg, "demo_off"))
             elif p is None or not (p.is_file() or default_of(p)):
                 code, body = 404, build_message(cfg, tabs, t(cfg, "msg_not_editable", name=html.escape(fname)))
             else:
@@ -3725,7 +4480,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _api_get(self, fname):
         cfg = load_config()
-        if err := self._api_denied(cfg):
+        if err := self._api_denied(cfg, demo_ok=True):
             return self._json(403, {"error": err})
         if not self._auth_ok():
             return
@@ -3756,10 +4511,10 @@ class Handler(BaseHTTPRequestHandler):
         self._json(200, {"items": items[:limit]})
 
     # ---- writes from page widgets (theme, language, notes, tasks) — always with the editor password
-    def _write_guard(self):
+    def _write_guard(self, demo_ok=False):
         """Shared checks; returns (cfg, data) or None if an error response was already sent."""
         cfg = load_config()
-        if err := self._api_denied(cfg):
+        if err := self._api_denied(cfg, demo_ok=demo_ok):
             self._json(403, {"error": err})
             return None
         if not self._auth_ok():
@@ -3769,6 +4524,13 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError as e:
             self._json(400, {"error": str(e)})
             return None
+
+    def _doc(self, cfg, data, p):
+        """The document to work on: in demo mode the visitor's own copy (`doc`), otherwise the file."""
+        doc = data.get("doc")
+        if DEMO and isinstance(doc, str) and len(doc.encode()) <= int(cfg["editor"]["max_size_kb"]) * 1024:
+            return doc.replace("\r\n", "\n")
+        return p.read_text(encoding="utf-8")
 
     def _user_md(self, cfg, fname):
         p = editable_path(fname)
@@ -3821,7 +4583,7 @@ class Handler(BaseHTTPRequestHandler):
         self._json(200, {"ok": True})
 
     def _api_note(self):
-        if not (g := self._write_guard()):
+        if not (g := self._write_guard(demo_ok=True)):
             return
         cfg, data = g
         if not (p := self._user_md(cfg, str(data.get("file", "")))):
@@ -3833,7 +4595,7 @@ class Handler(BaseHTTPRequestHandler):
         if any(x.strip() in (NOTE_OPEN, NOTE_CLOSE) for x in new.split("\n")):
             return self._json(400, {"error": t(cfg, "err_note_markers")})
         with _lock:
-            text = p.read_text(encoding="utf-8")
+            text = self._doc(cfg, data, p)
             ranges = note_ranges(text)
             if not 0 <= i < len(ranges):
                 return self._json(409, {"error": t(cfg, "err_note_changed")})
@@ -3843,12 +4605,14 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(409, {"error": t(cfg, "err_note_changed")})
             closing = lines[b:b + 1] or [NOTE_CLOSE]
             lines[a + 1:b + 1] = (new.split("\n") if new else []) + closing
+            if DEMO:
+                return self._json(200, {"ok": True, "doc": "\n".join(lines)})
             write_atomic(p, "\n".join(lines))
         self._json(200, {"ok": True})
 
     def _api_block(self):
         """POST /api/block {file, i, orig, text}: replaces the body of the i-th `##*` block."""
-        if not (g := self._write_guard()):
+        if not (g := self._write_guard(demo_ok=True)):
             return
         cfg, data = g
         if not (p := self._user_md(cfg, str(data.get("file", "")))):
@@ -3860,7 +4624,7 @@ class Handler(BaseHTTPRequestHandler):
         if any(BLOCK_RE.match(x) or COLUMN_RE.match(x) for x, _ in iter_lines_with_fence(new) if _):
             return self._json(400, {"error": t(cfg, "err_block_heading")})
         with _lock:
-            text = p.read_text(encoding="utf-8")
+            text = self._doc(cfg, data, p)
             ranges = edit_block_ranges(text)
             if not 0 <= i < len(ranges) or edit_block_source(text, i) != orig:
                 return self._json(409, {"error": t(cfg, "err_block_changed")})
@@ -3870,19 +4634,53 @@ class Handler(BaseHTTPRequestHandler):
             out = "\n".join(lines)
             if len(out.encode()) > int(cfg["editor"]["max_size_kb"]) * 1024:
                 return self._json(413, {"error": t(cfg, "err_too_big")})
+            if DEMO:
+                return self._json(200, {"ok": True, "doc": out})
             write_atomic(p, out)
         log.info("block %d of %s saved", i, p.name)
         self._json(200, {"ok": True})
 
+    def _api_render(self):
+        """POST /api/render {name, doc, embed, lang} (demo mode only): the tab rendered from the
+        visitor's own copy of its file. Nothing is stored; feeds and check targets that appear only
+        in the visitor's text are not added (the server never fetches what a visitor typed)."""
+        cfg = load_config()
+        if not DEMO:
+            return self._json(404, {"error": t(cfg, "err_unknown_endpoint")})
+        if err := self._api_denied(cfg, editor=False):
+            return self._json(403, {"error": err})
+        if not demo_rate_ok(self.client_address[0]):
+            return self._json(429, {"error": t(cfg, "err_rate")})
+        try:
+            data = self._read_json(cfg)
+        except ValueError as e:
+            return self._json(400, {"error": str(e)})
+        name, doc = str(data.get("name", "")), data.get("doc")
+        if not isinstance(doc, str) or len(doc.encode()) > int(cfg["editor"]["max_size_kb"]) * 1024:
+            return self._json(400, {"error": t(cfg, "err_bad_request")})
+        lang = str(data.get("lang") or "") or self._cookie("h6082_lang") or None
+        with _lock:
+            cfg = with_lang(cfg, lang)
+            tabs = list_tabs(cfg)
+            if not TAB_RE.match(name) or LANG_SUFFIX_RE.match(name) or page_path(cfg, name) is None:
+                return self._json(404, {"error": t(cfg, "err_file_missing")})
+            feeds, targets = set(FEEDS), set(CHECK_TARGETS)
+            try:
+                out = build_tab(cfg, tabs, name, bool(data.get("embed")), override=doc.replace("\r\n", "\n"))
+            finally:
+                FEEDS.clear(); FEEDS.update(feeds)
+                CHECK_TARGETS.clear(); CHECK_TARGETS.update(targets)
+        self._send(200, out.encode("utf-8"), "text/html; charset=utf-8")
+
     def _api_tasks(self):
-        if not (g := self._write_guard()):
+        if not (g := self._write_guard(demo_ok=True)):
             return
         cfg, data = g
         if not (p := self._user_md(cfg, str(data.get("file", "")))):
             return
         op = data.get("op")
         with _lock:
-            text = p.read_text(encoding="utf-8")
+            text = self._doc(cfg, data, p)
             if data.get("sig") != tasks_sig(text):
                 return self._json(409, {"error": t(cfg, "err_tasks_changed")})
             lines, idx = text.split("\n"), task_lines(text)
@@ -3919,6 +4717,8 @@ class Handler(BaseHTTPRequestHandler):
             except (KeyError, IndexError, ValueError, TypeError, AttributeError):
                 return self._json(400, {"error": t(cfg, "err_bad_task")})
             new = "\n".join(lines)
+            if DEMO:
+                return self._json(200, {"ok": True, "sig": tasks_sig(new), "doc": new})
             write_atomic(p, new)
         self._json(200, {"ok": True, "sig": tasks_sig(new)})
 
@@ -4172,6 +4972,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._api_history_write(path.rsplit("/", 1)[1])
         if path == "/api/rename":
             return self._api_rename()
+        if path == "/api/render":
+            return self._api_render()
         if path != "/api/new":
             return self._json(404, {"error": t(load_config(), "err_unknown_endpoint")})
         cfg = load_config()

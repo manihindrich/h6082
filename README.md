@@ -131,6 +131,7 @@ tab to play with. The full documentation lives inside the app: open the **h6082*
 | `H6082_EDITOR_USER`, `H6082_EDITOR_PASSWORD` | login for the editor and every write |
 | `H6082_ALLOWED_HOSTS` | extra host names, e.g. your domain behind a reverse proxy |
 | `H6082_READONLY` | `1` = public read-only page (see below) |
+| `H6082_DEMO` | `1` = read-only demo where visitors can edit in their own browser (see below) |
 
 Everything else — themes, layout, language, widgets — is in `content/config.toml`, editable right in the
 browser.
@@ -166,6 +167,10 @@ git pull && docker compose up -d --build
 disappear, the content comes only from the image and no volume is needed. Visitors can still switch
 theme and language — stored only in their own browser. That is exactly how the
 [live demo](https://h.6082.cz/) runs: read-only container, no volume, no secrets.
+
+`H6082_DEMO=1` goes one step further: still nothing is written on the server, but visitors can edit pages,
+tick tasks, write notes and change `##*` blocks. Their changes live only in their own browser until they
+reset the demo; features the demo can't do stay visible, dimmed, with a hint.
 
 ## Under the hood
 
