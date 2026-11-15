@@ -107,6 +107,10 @@ DEFAULTS = {
         "autosave_ms": 800,
         "max_size_kb": 1024,
         "suggest": True,
+        # what the suggestion list offers (each part can be switched off; suggest = false switches all off)
+        "suggestions": {"columns": True, "shortcodes": True, "callouts": True, "attributes": True, "tasks": True, "due_dates": True, "html": True, "inline": True, "line_starts": True, "links": True, "media": True, "code": True},
+        # what the editor completes by itself while typing
+        "autocomplete": {"pairs": True, "wrap": True, "lists": True, "fences": True, "tables": True, "notes": True, "html": True, "admonitions": True},
     },
     "api": {
         "allowed_hosts": ["127.0.0.1", "localhost"],
@@ -222,7 +226,7 @@ DEFAULTS = {
         "max_age_days": 90,
     },
     "system": {
-        "enabled": True,
+        "enabled": False,         # /api/sys shows server data to anyone who sees the page
         "interval_s": 5,
         "disks": [{"label": "/", "path": "/host/disk/root"}],
         "temps": [],
@@ -335,6 +339,8 @@ STRINGS = {
         "loading_feed": "loading feed…",
         "loading": "loading…",
         "sys_disabled": "server stats are disabled ([system] enabled)",
+        "sys_sample": "Sample values. Real ones: [system] enabled = true in config.toml.",
+        "history_sample": "Sample changes. Real ones: [history] enabled = true in config.toml.",
         "email_nojs": "e-mail (enable JavaScript)",
         "history_disabled": "history is disabled ([history] enabled)",
         "editor_disabled_small": "the editor is disabled",
@@ -355,6 +361,7 @@ STRINGS = {
         "ed_force": "overwrite",
         "ed_back": "back",
         "ed_rename": "rename",
+        "ed_defcfg": "Load the current default config into the editor (Ctrl+Z undoes it, the old one stays in history)",
         "ed_hide": "In the tab bar · click to hide it (it stays reachable from settings)",
         "ed_unhide": "Hidden from the tab bar, reachable from settings · click to show it",
         "ld_aria": "an editor writing markdown and a live preview of the page",
@@ -398,6 +405,7 @@ STRINGS = {
         "err_rename_target": "a tab can't be renamed to a translation name (name.{lang})",
         "warn_rename_config": "config.toml still refers to {old} — it could not be updated automatically, change it by hand",
         "js_rename_prompt": "New name (without .md). Translations are renamed with the tab:",
+        "js_defcfg_confirm": "Replace the whole config in the editor with the current default? Your settings will be overwritten; Ctrl+Z or history brings them back.",
         "js_rename_unsaved": "save the file first (conflict / error)",
         "msg_no_pages": "There is no <code>.md</code> file in <code>content/pages/</code>.",
         "msg_no_tab": "Tab <code>{name}</code> does not exist.",
@@ -505,6 +513,8 @@ STRINGS = {
         "loading_feed": "načítám feed…",
         "loading": "načítám…",
         "sys_disabled": "výpis serveru je vypnutý ([system] enabled)",
+        "sys_sample": "Ukázkové hodnoty. Skutečné: [system] enabled = true v config.toml.",
+        "history_sample": "Ukázkové změny. Skutečné: [history] enabled = true v config.toml.",
         "email_nojs": "e-mail (zapni JavaScript)",
         "history_disabled": "historie je vypnutá ([history] enabled)",
         "editor_disabled_small": "editor je vypnutý",
@@ -525,6 +535,7 @@ STRINGS = {
         "ed_force": "přepsat",
         "ed_back": "zpět",
         "ed_rename": "přejmenovat",
+        "ed_defcfg": "Načíst do editoru aktuální výchozí config (Ctrl+Z to vrátí, starý zůstane v historii)",
         "ed_hide": "V liště záložek · klik ji skryje (zůstane dostupná z nastavení)",
         "ed_unhide": "Skrytá z lišty, dostupná z nastavení · klik ji zobrazí",
         "ld_aria": "editor, ve kterém vzniká markdown, a živý náhled stránky",
@@ -568,6 +579,7 @@ STRINGS = {
         "err_rename_target": "záložku nejde přejmenovat na název překladu (jméno.{lang})",
         "warn_rename_config": "config.toml dál odkazuje na {old} — automaticky ho nešlo upravit, změň ho ručně",
         "js_rename_prompt": "Nový název (bez .md). Překlady se přejmenují se záložkou:",
+        "js_defcfg_confirm": "Nahradit celý config v editoru aktuálním výchozím? Tvoje nastavení se přepíše; Ctrl+Z nebo historie ho vrátí.",
         "js_rename_unsaved": "nejdřív soubor ulož (konflikt / chyba)",
         "msg_no_pages": "Ve složce <code>content/pages/</code> není žádný <code>.md</code> soubor.",
         "msg_no_tab": "Záložka <code>{name}</code> neexistuje.",
@@ -1384,7 +1396,7 @@ def examples_bar(cfg):
     off = demo_off(cfg) if DEMO else (" disabled" if READONLY or not cfg["editor"]["enabled"] else "")
     return (f'<div class="examples-bar"><a class="tab" href="/examples">{t(cfg, "ex_open")}</a>'
             f'<label class="examples-switch"{off}><input type="checkbox" data-examples-tab{on}'
-            f'{" disabled" if off else ""}> {t(cfg, "ex_tab")}</label></div>')
+            f'{" disabled" if off and not DEMO else ""}> {t(cfg, "ex_tab")}</label></div>')   # demo: looks live, a click shows the hint
 
 
 def lang_buttons(cfg):
@@ -1416,13 +1428,16 @@ SYS_PARTS = ("cpu", "mem", "swap", "load", "temp", "uptime", "disk")
 
 
 def sys_box(cfg, args):
-    """{{sys [parts…] [demo]}} — `demo` = made-up values in the browser, no API call, no server data."""
-    demo = "demo" in args
+    """{{sys [parts…] [demo|auto]}} — `demo` = made-up values in the browser, no API call, no server data;
+    `auto` = real values when [system] enabled, otherwise made-up ones with a note how to switch them on."""
+    auto = "auto" in args and not cfg["system"]["enabled"]
+    demo = "demo" in args or auto
     if not demo and not cfg["system"]["enabled"]:
         return f"<small>{t(cfg, 'sys_disabled')}</small>"
     parts = [a for a in args if a in SYS_PARTS] or list(SYS_PARTS)
     d = ' data-demo="1"' if demo else ""
-    return f'<div class="sys" data-sys="{" ".join(parts)}"{d}><small>{t(cfg, "loading")}</small></div>'
+    note = f'<small class="sample-note">{t(cfg, "sys_sample")}</small>' if auto else ""
+    return f'<div class="sys" data-sys="{" ".join(parts)}"{d}><small>{t(cfg, "loading")}</small></div>{note}'
 
 
 EMAIL_RE = re.compile(r"\{\{\s*email\s+([^\s{}@]+)\s+([^\s{}@]+)\s*\}\}")
@@ -1515,15 +1530,18 @@ def inline_shortcodes(line, cfg):
 
 
 def history_box(cfg, args):
-    """{{history [file] [count] [demo]}} — `demo` = made-up changes, no real file names."""
-    demo = "demo" in args
+    """{{history [file] [count] [demo|auto]}} — `demo` = made-up changes, no real file names;
+    `auto` = the real history when [history] enabled, otherwise made-up changes with a note."""
+    auto = "auto" in args and not cfg["history"]["enabled"]
+    demo = "demo" in args or auto
     if not demo and not cfg["history"]["enabled"]:
         return f"<small>{t(cfg, 'history_disabled')}</small>"
     fname = next((a for a in args if editable_path(a)), "")
     limit = next((a for a in args if a.isdigit()), "10")
     d = ' data-demo="1"' if demo else ""
+    note = f'<small class="sample-note">{t(cfg, "history_sample")}</small>' if auto else ""
     return (f'<div class="hist-box" data-file="{html.escape(fname)}" data-limit="{limit}"{d}>'
-            f'<small>{t(cfg, "loading")}</small></div>')
+            f'<small>{t(cfg, "loading")}</small></div>{note}')
 
 
 def expand_shortcodes(cfg, text):
@@ -2961,17 +2979,30 @@ function suggestItems(cs) {
     it('##. `§title§`', L('card without frame (column heading)', 'karta bez rámečku (nadpis sloupce)')),
     it('##- ', L('card, folded (a click opens it)', 'karta sbalená (klik ji otevře)')),
     it('##+ ', L('card that can be folded', 'karta, která jde sbalit')),
-    it('### ', L('subheading', 'podnadpis')),
+    it('### ', L('subheading', 'podnadpis')), it('#### ', L('small muted heading', 'malý tlumený nadpis')),
+    it('##### ', L('smaller muted heading', 'menší tlumený nadpis')), it('###### ', L('smallest heading, italic', 'nejmenší nadpis, kurzívou')),
+    it('#§25§% ', L('column, width in % of the row', 'sloupec, šířka v % řádku')),
   ];
   const SC = [
     it('{{rss §URL§ 5}}', L('RSS feed', 'RSS feed')),
+    it('{{rss §URL§ 5 demo}}', L('RSS with made-up headlines', 'RSS s vymyšlenými titulky')),
     it('{{sys cpu mem disk}}', L('server status', 'stav serveru')),
+    it('{{sys cpu mem disk auto}}', L('server status, sample data until [system] is on', 'stav serveru, ukázková data, dokud je [system] vypnutý')),
+    it('{{sys cpu mem disk demo}}', L('server status, made-up values', 'stav serveru, vymyšlené hodnoty')),
     it('{{history 10}}', L('recent changes', 'poslední změny')),
+    it('{{history 5 auto}}', L('recent changes, sample data until [history] is on', 'poslední změny, ukázková data, dokud je [history] vypnutá')),
+    it('{{history 5 demo}}', L('recent changes, made-up', 'poslední změny, vymyšlené')),
+    it('{{countdown +§12§}}', L('countdown, days from today', 'odpočet, dny od dneška')),
+    it('{{countdown §2026-11-12§ days}}', L('only the number of days', 'jen počet dní')),
     it('{{note}}\n§\n{{/note}}', L('note editable on the page', 'poznámka upravitelná na stránce')),
     it('{{email §name§ domain}}', L('protected e-mail', 'chráněný e-mail')),
     it('{{gear}}', L('the settings gear inside text', 'ozubené kolečko nastavení v textu')),
     it('{{countdown §2026-12-24§}}', L('time to / since a date', 'odpočet do / od data')),
     it('{{files}}', L('list of files', 'seznam souborů')),
+    it('{{files user}}', L('only your files', 'jen tvoje soubory')),
+    it('{{files system}}', L('only built-in pages and config', 'jen vestavěné stránky a config')),
+    it('{{example §tasks§}}', L('small animated example (a part of /examples)', 'malá animovaná ukázka (část z /examples)')),
+    it('{{examples}}', L('examples button and tab switch', 'tlačítko ukázek a přepínač záložky')),
     it('{{newfile}}', L('new file form', 'formulář pro nový soubor')),
     it('{{theme}}', L('theme picker', 'výběr motivu')),
     it('{{lang}}', L('language switch', 'přepínač jazyka')),
@@ -2979,20 +3010,52 @@ function suggestItems(cs) {
   const CALL = [['tip', L('green hint', 'zelený tip')], ['note', L('blue note', 'modrá poznámka')],
     ['info', L('info', 'informace')], ['warning', L('warning', 'varování')], ['danger', L('danger', 'nebezpečí')],
     ['success', L('done, OK', 'hotovo, v pořádku')], ['example', L('example', 'příklad')],
-    ['quote', L('quote', 'citace')], ['question', L('question', 'otázka')]]
-    .flatMap(([k, d]) => [it('> [!' + k + '] ', d), it('> [!' + k + ']- ', d + L(', folded', ', sbalený'))]);
+    ['quote', L('quote', 'citace')], ['question', L('question', 'otázka')],
+    ['important', L('important (green)', 'důležité (zelená)')], ['caution', L('caution (orange)', 'pozor (oranžová)')],
+    ['bug', L('bug (red)', 'chyba (červená)')], ['todo', L('to do (blue)', 'udělat (modrá)')],
+    ['abstract', L('summary', 'shrnutí')], ['failure', L('failure (red)', 'selhání (červená)')]]
+    .flatMap(([k, d]) => [it('> [!' + k + '] ', d), it('> [!' + k + ']- ', d + L(', folded', ', sbalený')),
+      it('> [!' + k + ']+ ', d + L(', open but foldable', ', otevřený, jde sbalit'))]);
   const CLS = [['.check', L('status dot of a link', 'tečka stavu odkazu')], ['.center', L('centred', 'na střed')],
     ['.right', L('to the right', 'doprava')], ['.big', L('bigger text', 'větší písmo')], ['.huge', L('huge text', 'velké písmo')],
     ['.small', L('smaller text', 'menší písmo')], ['.muted', L('muted colour', 'tlumená barva')],
     ['.fill', L('card fills the column height', 'karta vyplní výšku sloupce')],
-    ['.mobile', L('only on phones', 'jen na telefonu')], ['.desktop', L('only on larger screens', 'jen na větší obrazovce')]].map(([k, d]) => it(k, d));
-  const LANGS = ['bash', 'python', 'toml', 'json', 'yaml', 'js', 'html', 'css', 'sql', 'text']
-    .map((k) => it('```' + k, L('code block', 'blok kódu')));
+    ['.mobile', L('only on phones', 'jen na telefonu')], ['.desktop', L('only on larger screens', 'jen na větší obrazovce')],
+    ['.demo', L('made-up status (with .check)', 'vymyšlený stav (s .check)')], ['.warn', L('orange status (with .check .demo)', 'oranžový stav (s .check .demo)')],
+    ['.down', L('red status (with .check .demo)', 'červený stav (s .check .demo)')]].map(([k, d]) => it(k, d));
+  const ATTR = [it(L('#§anchor§', '#§kotva§'), L('anchor id, link with (#…)', 'kotva, odkaz přes (#…)')),
+    it('width=§20§', L('image width (px or %)', 'šířka obrázku (px nebo %)')),
+    it('target=_blank', L('open the link in a new tab', 'otevřít odkaz v nové záložce')),
+    it('style="§color:#00bfa5§"', L('own CSS', 'vlastní CSS')),
+    it('check="§tcp://host:22§"', L('own status target (https:// or tcp://)', 'vlastní cíl stavu (https:// nebo tcp://)')),
+    it('ms=§24§', L('made-up response time (with .demo)', 'vymyšlená odezva (s .demo)'))];
+  const LANGS = ['bash', 'python', 'toml', 'json', 'yaml', 'js', 'html', 'css', 'sql', 'diff', 'rust', 'nix', 'go', 'md', 'text']
+    .map((k) => it('```' + k, L('code block', 'blok kódu')))
+    .concat([it('```§python§ hl_lines="2" linenums="1"', L('code block with highlighted line and numbers', 'blok kódu se zvýrazněným řádkem a čísly')),
+      it('```md live', L('code with a small live example under it', 'kód a pod ním malá živá ukázka'))]);
   const TASK = [it('[ ] ', L('task', 'úkol')), it('[x] ', L('done task', 'hotový úkol'))];
-  return {COLS, SC, CALL, CLS, LANGS, TASK, L};
+  const DUE = [it('@+§3§', L('due in 3 days', 'termín za 3 dny')), it('@-§1§', L('due yesterday (overdue)', 'termín včera (po termínu)')),
+    it('@+0 §14:00§', L('today at a time', 'dnes v daný čas')), it('@§2026-12-01§', L('due date', 'termín datem'))];
+  const HTML = [it('<small>§§</small>', L('small text', 'malý text')), it('<sup>§§</sup>', L('superscript', 'horní index')),
+    it('<sub>§§</sub>', L('subscript', 'dolní index')), it('<u>§§</u>', L('underline', 'podtržení')),
+    it('<kbd>§§</kbd>', L('key', 'klávesa')), it('<mark>§§</mark>', L('highlight', 'zvýraznění')), it('<br>', L('line break', 'zalomení řádku')),
+    it('<span style="§color:#ff9100§">…</span>', L('text with own CSS', 'text s vlastním CSS')),
+    it('<div markdown="1">\n§§\n</div>', L('box, markdown inside', 'blok, uvnitř markdown')),
+    it('<details><summary>§title§</summary>\n\n</details>', L('foldable block', 'sbalitelný blok'))];
+  const INLINE = [it('++ctrl+§b§++', L('keyboard shortcut', 'klávesová zkratka')), it('[?](§text§)', L('hint icon', 'ikona s nápovědou')),
+    it('[^§1§]', L('footnote', 'poznámka pod čarou')), it('==§text§==', L('highlight', 'zvýraznění'))];
+  const LINE = [it('!!! §note§ "Title"\n    ', L('admonition (MkDocs)', 'admonition (MkDocs)')),
+    it('??? §note§ "Title"\n    ', L('folded block (MkDocs)', 'sbalený blok (MkDocs)')),
+    it('???+ §note§ "Title"\n    ', L('open foldable block', 'otevřený sbalitelný blok')),
+    it('*[§HTML§]: §…§', L('abbreviation explained on hover', 'zkratka s vysvětlením po najetí')),
+    it('[^§1§]: §…§', L('footnote text', 'text poznámky pod čarou')),
+    it('/', L('empty line (// two, /// three)', 'prázdný řádek (// dva, /// tři)')),
+    it('// ', L('hidden note, not shown on the page', 'skrytá poznámka, na stránce se neukáže'))];
+  return {COLS, SC, CALL, CLS, ATTR, LANGS, TASK, DUE, HTML, INLINE, LINE, L};
 }
 
 function smartEditor(ta, MD) {
+  const ac = (k) => ((window.H6082_SUGGEST || {}).ac || {})[k] !== false;   // [editor.autocomplete]
   const PAIRS = {'(': ')', '[': ']', '{': '}', '<': '>', '"': '"', "'": "'", '`': '`'};
   const CLOSERS = new Set(Object.values(PAIRS));
   const FENCE = /^[ \t]*(```|~~~)/;
@@ -3020,13 +3083,47 @@ function smartEditor(ta, MD) {
     const before = v.slice(ls, s), after = v.slice(en, lineEnd(v, en));
     const inCode = MD && fencesIn(v.slice(0, ls)) % 2 === 1;
     if (MD && !inCode) {
+      const line = v.slice(ls, lineEnd(v, en));
+      // {{note}} → its closing line, the caret in between
+      if (ac('notes') && s === en && /^\s*\{\{\s*note\s*\}\}\s*$/.test(line) && !after.trim()) {
+        const rest = v.slice(lineEnd(v, s));
+        const nx = rest.search(/\{\{\s*note\s*\}\}/), cl = rest.search(/\{\{\s*\/note\s*\}\}/);
+        if (cl < 0 || (nx >= 0 && nx < cl)) { put('\n\n{{/note}}', s, en, 1); return true; }
+      }
+      // !!! note "Title" / ??? note: the content is indented by 4 spaces
+      if (ac('admonitions') && s === en && /^(!!!|\?\?\?\+?)\s+\w+/.test(before) && !after.trim()) {
+        put('\n    ', s, en, 5); return true;
+      }
+      // tables: Enter at the end of a row starts a new row; under the header the |---| line comes first
+      const tr = /^\s*\|(.*)\|\s*$/.exec(line);
+      if (ac('tables') && tr && s === en) {
+        const cells = tr[1].split('|');
+        if (cells.every((c) => !c.trim())) { put('', ls, lineEnd(v, en), 0); return true; }   // empty row: end of table
+        const prevLine = ls > 0 ? v.slice(lineStart(v, ls - 1), ls - 1) : '';
+        const nextLine = v.slice(lineEnd(v, s) + 1, lineEnd(v, lineEnd(v, s) + 1));
+        const isSep = (l) => /^\s*\|?(\s*:?-+:?\s*\|)+\s*:?-*:?\s*\|?\s*$/.test(l) && l.includes('-');
+        const row = '| ' + cells.map(() => '').join(' | ') + ' |';
+        if (!/^\s*\|/.test(prevLine) && !isSep(nextLine) && !isSep(line)) {
+          const sep = '|' + cells.map(() => '---').join('|') + '|';
+          const le = lineEnd(v, s);
+          put('\n' + sep + '\n' + row, le, le, sep.length + 4); return true;
+        }
+        const le = lineEnd(v, s);
+        put('\n' + row, le, le, 3); return true;   // anywhere in a row: a new row below it
+      }
       const f = /^([ \t]*)(`{3,}|~{3,})[^`]*$/.exec(before);
-      if (f && s === en && !after.trim() && fencesIn(v.slice(lineEnd(v, s))) % 2 === 0) {
+      if (ac('fences') && f && s === en && !after.trim() && fencesIn(v.slice(lineEnd(v, s))) % 2 === 0) {
         const mid = '\n' + f[1];
         put(mid + '\n' + f[1] + f[2], s, en, mid.length);
         return true;
       }
-      const m = LIST.exec(before);
+      // definition list: Enter after ": text" continues with ": ", an empty one ends it
+      const dd = /^(\s*):\s(.*)$/.exec(before);
+      if (ac('lists') && dd && s === en) {
+        if (!dd[2].trim() && !after.trim()) { put('', ls, lineEnd(v, en), 0); return true; }
+        put('\n' + dd[1] + ': ', s, en, dd[1].length + 3); return true;
+      }
+      const m = ac('lists') ? LIST.exec(before) : null;
       if (m) {
         if (before.length === m[0].length && !after.trim()) { put('', ls, lineEnd(v, en), 0); return true; }
         const mark = m[3] ? (Number(m[3]) + 1) + m[4] : m[2];
@@ -3034,7 +3131,7 @@ function smartEditor(ta, MD) {
         put(text, s, en, text.length);
         return true;
       }
-      const q = QUOTE.exec(before);
+      const q = ac('lists') ? QUOTE.exec(before) : null;
       if (q) {
         if (!before.slice(q[0].length).trim() && !after.trim()) { put('', ls, lineEnd(v, en), 0); return true; }
         const text = '\n' + q[0].replace(/>$/, '> ');
@@ -3167,7 +3264,8 @@ function smartEditor(ta, MD) {
   function suggester() {
     const C = window.H6082_SUGGEST || {};
     if (C.off || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches)) return;
-    const {COLS, SC, CALL, CLS, LANGS, TASK, L} = suggestItems(C.lang === 'cs');
+    const {COLS, SC, CALL, CLS, ATTR, LANGS, TASK, DUE, HTML, INLINE, LINE, L} = suggestItems(C.lang === 'cs');
+    const sg = (k) => (C.sg || {})[k] !== false;   // [editor.suggestions] in config.toml
     const it = (text, desc) => ({text, desc});
 
     // what the text before the caret asks for: {from, items, eat}
@@ -3176,17 +3274,27 @@ function smartEditor(ta, MD) {
       let fence = false;
       for (const l of v.slice(0, ls).split('\n')) if (FENCE.test(l)) fence = !fence;
       let m;
-      if ((m = /^```(\w*)$/.exec(before))) return {from: ls, q: before, items: fence ? [] : LANGS};
+      if ((m = /^```(\w*)$/.exec(before))) return {from: ls, q: before, items: fence || !sg('code') ? [] : LANGS};
       if (fence) return null;
-      if ((m = /^#{1,3}[+\-*]*$/.exec(before))) return {from: ls, q: before, items: COLS};
-      if ((m = /\{\{(\w*)$/.exec(before))) return {from: s - m[0].length, q: m[0], items: SC, eat: /^\}{1,2}/};
-      if ((m = /^>\s?\[!(\w*\]?-?)$/.exec(before))) return {from: ls, q: '> [!' + m[1], items: CALL, eat: /^\]/};
-      if ((m = /\{:?\s*(\.[\w-]*)$/.exec(before))) return {from: s - m[1].length, q: m[1], items: CLS};
-      if ((m = /\]\((\/[\w.-]*)$/.exec(before))) {
+      if (sg('columns') && (m = /^#{1,6}[+\-*]*$/.exec(before))) return {from: ls, q: before, items: COLS};
+      if (sg('shortcodes') && (m = /\{\{(\w*)$/.exec(before))) return {from: s - m[0].length, q: m[0], items: SC, eat: /^\}{1,2}/};
+      if (sg('callouts') && (m = /^>\s?\[!(\w*\]?[-+]?)$/.exec(before))) return {from: ls, q: '> [!' + m[1], items: CALL, eat: /^\]/};
+      if (sg('attributes') && (m = /(?<!\{)\{:?(?:[^{}\n]*\s)?([.#]?[\w=-]*)$/.exec(before)) && (m[1] || /[{\s:]$/.test(before)))
+        return {from: s - m[1].length, q: m[1], items: m[1].startsWith('.') ? CLS : ATTR.concat(CLS)};
+      if (sg('due_dates') && (m = /^\s*[-*+] \[[ xX]\] .*\s(@[\w+:-]*)$/.exec(before))) return {from: s - m[1].length, q: m[1], items: DUE};
+      if (sg('html') && (m = /(?:^|[^`])<(\w*)$/.exec(before)) && (before.split('`').length % 2 === 1))
+        return {from: s - m[1].length - 1, q: '<' + m[1], items: HTML, eat: /^>/};
+      if (sg('line_starts') && (m = /^(!{1,3}|\?{1,3}\+?|\*\[|\[\^|\/{1,2})$/.exec(before))) return {from: ls, q: before, items: LINE, eat: /^\]/};
+      if (sg('inline') && (m = /(?:^|\s)(\+\+\w*|\[[?^]|==)$/.exec(before))) return {from: s - m[1].length, q: m[1], items: INLINE, eat: /^\]/};
+      if (sg('media') && (m = /\]\((\/media\/[\w.-]*)$/.exec(before))) {
+        const files = (C.media || []).map((f) => it('/media/' + f, L('image', 'obrázek')));
+        return {from: s - m[1].length, q: m[1], items: files, eat: /^\)/};
+      }
+      if (sg('links') && (m = /\]\((\/[\w.-]*)$/.exec(before))) {
         const pages = (C.pages || []).map((p) => it('/' + p, L('page', 'stránka')));
         return {from: s - m[1].length, q: m[1], items: pages};
       }
-      if ((m = /^\s*[-*+] (\[[ xX]?)$/.exec(before))) return {from: s - m[1].length, q: m[1], items: TASK, eat: /^\]/};
+      if (sg('tasks') && (m = /^\s*[-*+] (\[[ xX]?)$/.exec(before))) return {from: s - m[1].length, q: m[1], items: TASK, eat: /^\]/};
       return null;
     }
 
@@ -3320,25 +3428,35 @@ function smartEditor(ta, MD) {
     }
     if (k === 'Tab') { e.preventDefault(); tab(v, s, en, ls, e.shiftKey); return; }
     if (k === 'Backspace') {
-      if (s === en && PAIRS[prev] && PAIRS[prev] === next) { e.preventDefault(); put('', s - 1, s + 1, 0); }
+      if (ac('pairs') && s === en && PAIRS[prev] && PAIRS[prev] === next) { e.preventDefault(); put('', s - 1, s + 1, 0); }
       return;
     }
     if (k.length !== 1) return;
+    // <small> typed: the closing tag follows, the caret in between
+    if (MD && ac('html') && k === '>' && s === en) {
+      const tg = /<([a-z][a-z0-9]*)(\s[^<>]*)?$/i.exec(v.slice(ls, s));
+      const VOID = /^(br|hr|img|input|wbr|col|source)$/i;
+      if (tg && !VOID.test(tg[1]) && fencesIn(v.slice(0, ls)) % 2 === 0 && v.slice(ls, s).split('`').length % 2 === 1) {
+        e.preventDefault(); put('></' + tg[1] + '>', s, en + (next === '>' ? 1 : 0), 1); return;
+      }
+    }
     // "a < b", "<=": drop the '>' we paired with '<' a moment ago
     if (s === en && lt === s && prev === '<' && next === '>' && (k === ' ' || k === '=')) {
       e.preventDefault(); put('<' + k, s - 1, s + 1, 2); return;
     }
     // typing a closer that is already there just steps over it
-    if (s === en && CLOSERS.has(k) && next === k) { e.preventDefault(); ta.setSelectionRange(s + 1, s + 1); return; }
+    if (ac('pairs') && s === en && CLOSERS.has(k) && next === k) { e.preventDefault(); ta.setSelectionRange(s + 1, s + 1); return; }
     // * _ ~ = wrap a selection (repeat for **bold**); ` around several lines makes a fence
-    if (MD && s !== en && (WRAP[k] || (k === '`' && v.slice(s, en).includes('\n')))) {
+    if (MD && ac('wrap') && s !== en && (WRAP[k] || (k === '`' && v.slice(s, en).includes('\n')))) {
       e.preventDefault(); inline(WRAP[k] || '`', 'add'); return;
     }
     const c = PAIRS[k];
     if (!c) return;
     if (s !== en) {  // wrap the selection
+      if (!ac('wrap')) return;
       e.preventDefault(); put(k + v.slice(s, en) + c, s, en, 1, 1 + en - s); return;
     }
+    if (!ac('pairs')) return;
     if (c === k && /[\p{L}\p{N}`]/u.test(prev)) return;    // don't, it's, ```
     if (next && !/[\s)\]}>.,;:!?'"`*_~]/.test(next)) return;  // right before a word
     e.preventDefault();
@@ -3624,6 +3742,16 @@ __SMART__
     gone = true;
     location.href = '/edit/' + encodeURIComponent(r.j.name);
   }));
+  const defcfg = document.getElementById('defcfg');   // config.toml: load the shipped default
+  if (defcfg) defcfg.onclick = async () => {
+    if (defcfg.hasAttribute('data-demo-off') || !confirm(T.defcfg_confirm)) return;
+    const r = await fetch('/api/default-config', {headers: H}).catch(() => null);
+    const j = r ? await r.json().catch(() => ({})) : {};
+    if (!r || !r.ok) { alert(j.error || (r && r.status)); return; }
+    ta.focus(); ta.select();
+    if (!document.execCommand('insertText', false, j.text)) { ta.value = j.text; ta.dispatchEvent(new Event('input', {bubbles: true})); }
+    ta.setSelectionRange(0, 0); ta.scrollTop = 0;
+  };
   const hide = document.getElementById('hide');   // [tabs] hidden: out of the tab bar, reachable from settings
   if (hide) hide.onclick = async () => {
     if (hide.hasAttribute('data-demo-off')) return;
@@ -3734,6 +3862,7 @@ ICON_LOOP = icon('<path d="M4 11V9a3 3 0 0 1 3-3h11"/><path d="M15 3l3 3-3 3"/>'
 ICON_MAX = icon('<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>', 13)
 ICON_CLOSE = icon('<path d="M6 6l12 12M18 6L6 18"/>', 13)
 ICON_SKIP = icon('<path d="M6 5.5l9 6.5-9 6.5z" fill="currentColor"/><path d="M18 5v14"/>', 12)
+ICON_DEFAULT = icon('<path d="M4 4v6h6"/><path d="M5.5 15a7.5 7.5 0 1 0 1.3-8.1L4 10"/>')
 ICON_NUMS = icon('<path d="M10 6h10M10 12h10M10 18h10"/><path d="M4 4.5l1.5-1V9" stroke-width="1.6"/>'
                  '<path d="M3.5 14.5a1.6 1.6 0 1 1 2.6 1.3L3.5 20H7" stroke-width="1.6"/>')
 
@@ -4409,7 +4538,11 @@ def number_tasks(cfg, body, count, editable):
 def smart_js(cfg):
     """SMART_JS with the settings for suggestions (on/off, language, page names for links)."""
     conf = {"off": not cfg["editor"].get("suggest", True), "lang": cur_lang(cfg),
-            "pages": list_tabs(cfg) + ["markdown", "documentation", "examples", "settings"]}
+            "sg": {k: bool(v) for k, v in cfg["editor"]["suggestions"].items()},
+            "ac": {k: bool(v) for k, v in cfg["editor"]["autocomplete"].items()},
+            "pages": list_tabs(cfg) + ["markdown", "documentation", "examples", "settings"],
+            "media": sorted({f.name for d in (MEDIA, DEFAULTS_DIR / "media") if d.is_dir() for f in d.iterdir()
+                             if MEDIA_RE.match(f.name) and not (f.name.endswith(".cs.svg") and cur_lang(cfg) != "cs")})}
     return "window.H6082_SUGGEST = " + json.dumps(conf, ensure_ascii=False).replace("<", "\\u003c") + ";\n" + SMART_JS
 
 
@@ -4507,6 +4640,11 @@ def build_editor(cfg, tabs, fname):
                 f'{ICON_RENAME}</button>'
                 f'<button id="del" type="button" class="tab icon danger"{del_title} aria-label="{t(cfg, "ed_delete")}">'
                 f'{ICON_DELETE}</button>')
+    elif fname == "config.toml":   # load the current default config into the editor (Ctrl+Z / history undo it)
+        off = demo_off(cfg)
+        tip = "" if off else f' title="{html.escape(t(cfg, "ed_defcfg"))}"'
+        acts = (f'<button id="defcfg" type="button" class="tab icon"{off}{tip} aria-label="{html.escape(t(cfg, "ed_defcfg"))}">'
+                f'{ICON_DEFAULT}</button>')
     elif fname.startswith("system/") and p.is_file() and default_of(p):
         acts = f'<button id="reset" type="button" class="tab danger"{demo_off(cfg)}>{t(cfg, "ed_reset")}</button>'
     acts = f'<span class="ed-acts">{acts}</span>' if acts else ""
@@ -5304,6 +5442,13 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(404, b"404\n", "text/plain")
         if path == "/api/file":
             return self._api_get(qs.get("name", [""])[0])
+        if path == "/api/default-config":   # the shipped config.toml (editor: "load default")
+            cfg = load_config()
+            if err := self._api_denied(cfg):
+                return self._json(403, {"error": err})
+            if not self._auth_ok():
+                return
+            return self._json(200, {"text": (DEFAULTS_DIR / "config.toml").read_text(encoding="utf-8")})
         if path == "/api/sys":
             cfg = load_config()
             if err := self._api_denied(cfg, editor=False):

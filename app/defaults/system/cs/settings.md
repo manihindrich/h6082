@@ -48,15 +48,14 @@ Vzhled se ladí v jednom přehledném TOML souboru. Celé to běží v jediném 
 
 #
 ## 🕓 Poslední změny
-{{history 5 demo}}
+{{history 5 auto}}
 
-<small>Ukázka. Všechny verze souboru najdeš v editoru pod **historie**, s diffem a obnovením.</small>
+<small>Všechny verze souboru najdeš v editoru pod **historie**, s diffem a obnovením.</small>
 
 
 #
 ## 📊 Server
-{{sys cpu mem load disk uptime demo}}
+{{sys cpu mem load disk uptime auto}}
 
-<small>Ukázka s vymyšlenými hodnotami. Skutečný stav: `[system] enabled = true` a karta bez `demo`.</small>
 
 #-

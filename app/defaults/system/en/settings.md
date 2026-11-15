@@ -48,15 +48,14 @@ The look is tuned in one clear TOML file. It all runs in a single lean container
 
 #
 ## 🕓 Recent changes
-{{history 5 demo}}
+{{history 5 auto}}
 
-<small>Sample. All versions of a file are in the editor under **history**, with diff and restore.</small>
+<small>All versions of a file are in the editor under **history**, with diff and restore.</small>
 
 
 #
 ## 📊 Server
-{{sys cpu mem load disk uptime demo}}
+{{sys cpu mem load disk uptime auto}}
 
-<small>Sample with made-up values. Real status: `[system] enabled = true` and the card without `demo`.</small>
 
 #-

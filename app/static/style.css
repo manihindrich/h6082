@@ -457,6 +457,8 @@ li:has(> a[data-check]:first-child) > a[data-check]:first-child::before { margin
 .file-btns .tab { padding: 0 8px; font-size: .85em; }
 .file-desc { display: block; margin: 1px 0 0; color: var(--muted); font-size: .85em; }
 .file-name small.file-desc { margin-left: 0; }
+/* {{sys auto}} / {{history auto}} with the feature off: a note under the sample data */
+.sample-note { display: block; margin-top: 4px; color: var(--muted); }
 /* the system list (documentation, configuration, markdown): bigger, easier to hit */
 .files-system .file-row { padding: 10px 0; gap: 12px; }
 .files-system .file-name { font-size: 1.45em; font-weight: 700; line-height: 1.2; color: var(--text); }

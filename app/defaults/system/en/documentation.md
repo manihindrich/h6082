@@ -208,6 +208,7 @@ Shows **made-up data** instead of real values. Useful for examples, documentatio
 | service status | `{.check .demo}`: green, `.warn` orange (401), `.down` red (timeout), `ms=24` response time | `{.check}` |
 | RSS | `{{rss URL 5 demo}}`: made-up headlines based on the feed address | `{{rss URL 5}}` |
 | server | `{{sys demo}}` | `{{sys}}` + `[system] enabled = true` |
+| either, by config | `{{sys auto}}`, `{{history 5 auto}}`: sample data while the feature is off | the same once it is on in the config |
 | history | `{{history 5 demo}}` | `{{history 5}}` |
 
 - none of this asks the server or downloads anything; it works even where real data is off (read-only mode, demo mode)
@@ -292,6 +293,7 @@ Saves automatically after a short pause in typing, ++ctrl+s++ saves right away. 
 - **editor | preview divider**: drag it with the mouse; a double-click centers it again, ++arrow-left++ ++arrow-right++ work on the focused divider. The width is remembered in the browser.
 - **preview** (button next to *view*) or ++alt+p++: hides / shows the preview
 - **hide from the bar** (eye icon next to the file name): crossed-out eye = the tab is not in the bar, you open it only from settings or via `/<name>`; stored in `[tabs] hidden`
+- **default config** (back-arrow icon, only for `config.toml`): loads the app's current default config into the editor; ++ctrl+z++ undoes it and the previous version stays in history. A deploy never overwrites your config, so this is how you get new comments and options.
 - **rename / delete** (pencil and trash icons next to the file name): renaming takes translations, history and references in `config.toml` along; deleting moves the file to `content/.trash/`. For an edited system page, *restore default* is here instead.
 - **line numbers**: the icon in the bar (next to *preview*) shows / hides them; the choice is remembered in the browser
 - **pairing**: `` ( [ { < " ' ` `` close automatically, typing the closing bracket just skips over it, ++backspace++ deletes an empty pair
@@ -331,14 +333,19 @@ Formatting shortcuts toggle: pressing again removes the format. Without a select
 {{rss https://news.ycombinator.com/rss 3}}
 {{/livedemo}}
 
-```md
-#        → columns and cards: #+ #- #1.2 #60px ## ##* ##. ##- …
-{{       → shortcodes: {{rss URL 5}}, {{note}} …
-> [!     → callouts: tip, warning, danger … also folded
-{.       → classes: .check .center .big .fill .mobile …
-](/      → names of your pages
+````md
+#        → columns, cards and headings: #+ #- #1.2 #60px #25% ## ##* ##. ##- ### … ######
+{{       → shortcodes: {{rss URL 5}}, {{sys … auto}}, {{countdown +12}}, {{example …}} …
+> [!     → callouts: tip, warning, danger, important, bug … folded (-) and open (+)
+{        → attributes: .check .demo .warn .center .big .fill .mobile #anchor width= target= style= …
+<        → HTML: <small> <sup> <kbd> <span style> <div markdown="1"> <details> …
+@        → due date after - [ ] task: @+3 @-1 @+0 14:00 @2026-12-01
+++ [? [^ → key ++ctrl+b++, hint [?](…), footnote [^1]
+!!! ??? *[ [^ / //   → at the start of a line: admonition, folded block, abbreviation, footnote text, spacer, hidden note
+](/      → names of your pages, ](/media/ images
 - [      → task
-```
+```       → code block language, hl_lines / linenums, md live
+````
 - the list appears only after these starts, not on every word
 - ++arrow-up++ ++arrow-down++ selects, ++enter++ or ++tab++ accepts, ++esc++ closes; without the list ++enter++ works as usual
 - after accepting a shortcode its parameter (`URL`) is selected, just type over it
@@ -356,7 +363,18 @@ Formatting shortcuts toggle: pressing again removes the format. Without a select
 : max. size of a saved file
 
 `suggest` · `true`
-: markdown and shortcode suggestions while typing (editor and `##*` cards, not on touch devices)
+: markdown and shortcode suggestions while typing (editor and `##*` cards, not on touch devices); `false` switches all suggestions off
+
+`[editor.suggestions]` · all `true`
+: parts of the list: `columns` (`#` columns and headings), `shortcodes` (`{{`), `callouts` (`> [!`), `attributes` (`{`), `tasks` (`- [`), `due_dates` (`@` after a task), `html` (`<`), `inline` (`++` `[?` `[^` `==`), `line_starts` (`!!!` `???` `*[` `/` `//`), `links` (`](/`), `media` (`](/media/`), `code` (```` ``` ````)
+
+`[editor.autocomplete]` · all `true`
+: what the editor completes by itself (`.md` files only): `pairs` (closing brackets and quotes), `wrap` (wrapping a selection), `lists` (++enter++ continues lists, tasks, quotes and `: ` definitions), `fences` (closing a code block), `tables` (++enter++ at the end of a table row adds a row, under the header also `|---|`; an empty row ends the table), `notes` (`{{note}}` → `{{/note}}`), `html` (`<small>` → `</small>`), `admonitions` (indenting the content after `!!!` and `???`)
+
+```toml
+[editor.autocomplete]
+tables = false
+```
 
 On a conflict the editor offers *load from file* or *overwrite*. The controls are described in the Editor card.
 

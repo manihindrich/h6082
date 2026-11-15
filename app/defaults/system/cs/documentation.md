@@ -208,6 +208,7 @@ Místo skutečných údajů ukážou **vymyšlená data**. Hodí se do ukázek, 
 | stav služeb | `{.check .demo}`: zelená, `.warn` oranžová (401), `.down` červená (timeout), `ms=24` odezva | `{.check}` |
 | RSS | `{{rss URL 5 demo}}`: vymyšlené titulky podle adresy feedu | `{{rss URL 5}}` |
 | server | `{{sys demo}}` | `{{sys}}` + `[system] enabled = true` |
+| obojí podle configu | `{{sys auto}}`, `{{history 5 auto}}`: ukázková data, dokud je funkce vypnutá | totéž po zapnutí v configu |
 | historie | `{{history 5 demo}}` | `{{history 5}}` |
 
 - nic z toho se neptá serveru ani nestahuje; funguje i tam, kde jsou skutečná data vypnutá (režim jen pro čtení, demo mód)
@@ -292,6 +293,7 @@ Ukládá se samo po chvíli bez psaní, ++ctrl+s++ uloží hned. Vpravo je živ�
 - **hranice editor | náhled**: táhni myší; dvojklik ji vrátí doprostřed, na zaměřené hranici fungují ++arrow-left++ ++arrow-right++. Šířka se pamatuje v prohlížeči.
 - **náhled** (tlačítko vedle *zobrazit*) nebo ++alt+p++: skryje / ukáže náhled
 - **skrýt z lišty** (ikona oka vedle názvu souboru): přeškrtnuté oko = záložka není v liště, otevřeš ji jen z nastavení nebo přes `/<jméno>`; zapíše se do `[tabs] hidden`
+- **výchozí config** (ikona šipky zpět, jen u `config.toml`): načte do editoru aktuální výchozí config z aplikace; ++ctrl+z++ to vrátí a předchozí verze zůstane v historii. Deploy tvůj config nikdy nepřepíše, takže tohle je způsob, jak dostat nové komentáře a volby.
 - **přejmenovat / smazat** (ikony tužky a koše vedle názvu souboru): přejmenování vezme i překlady, historii a odkazy v `config.toml`; smazání přesune soubor do `content/.trash/`. U upravené systémové stránky je tu *vrátit výchozí*.
 - **čísla řádků**: ikona v liště (vedle *náhled*) je zobrazí / skryje; volba se pamatuje v prohlížeči
 - **párování**: `` ( [ { < " ' ` `` se zavírají samy, napsání zavírací závorky ji jen přeskočí, ++backspace++ smaže prázdný pár
@@ -331,14 +333,19 @@ Zkratky formátování přepínají: druhé stisknutí formát zase odebere. Bez
 {{rss https://news.ycombinator.com/rss 3}}
 {{/livedemo}}
 
-```md
-#        → sloupce a karty: #+ #- #1.2 #60px ## ##* ##. ##- …
-{{       → shortcody: {{rss URL 5}}, {{note}} …
-> [!     → callouty: tip, warning, danger … i sbalené
-{.       → třídy: .check .center .big .fill .mobile …
-](/      → názvy tvých stránek
+````md
+#        → sloupce, karty a nadpisy: #+ #- #1.2 #60px #25% ## ##* ##. ##- ### … ######
+{{       → shortcody: {{rss URL 5}}, {{sys … auto}}, {{countdown +12}}, {{example …}} …
+> [!     → callouty: tip, warning, danger, important, bug … sbalené (-) i rozbalené (+)
+{        → atributy: .check .demo .warn .center .big .fill .mobile #kotva width= target= style= …
+<        → HTML: <small> <sup> <kbd> <span style> <div markdown="1"> <details> …
+@        → termín úkolu za - [ ] úkol: @+3 @-1 @+0 14:00 @2026-12-01
+++ [? [^ → klávesa ++ctrl+b++, nápověda [?](…), poznámka pod čarou [^1]
+!!! ??? *[ [^ / //   → na začátku řádku: admonition, sbalený blok, zkratka, text poznámky, mezera, skrytá poznámka
+](/      → názvy tvých stránek, ](/media/ obrázky
 - [      → úkol
-```
+```       → jazyk bloku kódu, hl_lines / linenums, md live
+````
 - nabídka se ukáže jen po těchto začátcích, ne u každého slova
 - ++arrow-up++ ++arrow-down++ vybírá, ++enter++ nebo ++tab++ potvrdí, ++esc++ zavře; bez nabídky ++enter++ funguje jako obvykle
 - u shortcodu se po potvrzení označí parametr (`URL`), stačí ho přepsat
@@ -356,7 +363,18 @@ Zkratky formátování přepínají: druhé stisknutí formát zase odebere. Bez
 : max. velikost ukládaného souboru
 
 `suggest` · `true`
-: našeptávání markdownu a shortcodů při psaní (editor i karty `##*`, ne na dotykových zařízeních)
+: našeptávání markdownu a shortcodů při psaní (editor i karty `##*`, ne na dotykových zařízeních); `false` vypne celé našeptávání
+
+`[editor.suggestions]` · vše `true`
+: jednotlivé části nabídky: `columns` (`#` sloupce a nadpisy), `shortcodes` (`{{`), `callouts` (`> [!`), `attributes` (`{`), `tasks` (`- [`), `due_dates` (`@` za úkolem), `html` (`<`), `inline` (`++` `[?` `[^` `==`), `line_starts` (`!!!` `???` `*[` `/` `//`), `links` (`](/`), `media` (`](/media/`), `code` (```` ``` ````)
+
+`[editor.autocomplete]` · vše `true`
+: co editor doplní sám (jen soubory `.md`): `pairs` (uzavření závorek a uvozovek), `wrap` (obalení výběru), `lists` (++enter++ pokračuje v seznamu, úkolech, citaci a definici `: `), `fences` (uzavření bloku kódu), `tables` (++enter++ na konci řádku tabulky přidá řádek, pod hlavičkou i `|---|`; prázdný řádek tabulku ukončí), `notes` (`{{note}}` → `{{/note}}`), `html` (`<small>` → `</small>`), `admonitions` (odsazení obsahu za `!!!` a `???`)
+
+```toml
+[editor.autocomplete]
+tables = false
+```
 
 Při konfliktu editor nabídne *načíst ze souboru* nebo *přepsat*. Ovládání je v kartě Editor.
 

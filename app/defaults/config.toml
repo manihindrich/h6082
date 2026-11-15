@@ -35,6 +35,32 @@ autosave_ms = 800          # autosave delay after the last key press
 max_size_kb = 1024         # max. size of a saved file
 suggest     = true         # suggestions while typing markdown (after #, {{, > [!, {., ](/ …); Enter / Tab confirm
 
+[editor.suggestions]
+# Parts of the suggestion list (suggest = false above switches all of them off).
+columns     = true         # #  ##  ##*  ##.  ###  …  #25%
+shortcodes  = true         # {{rss}} {{sys}} {{history}} {{note}} {{countdown}} {{example}} …
+callouts    = true         # > [!tip]  > [!warning]-  > [!bug]+ …
+attributes  = true         # { .check .demo .center .big .fill .mobile  #anchor width= target= style= …
+tasks       = true         # - [  → [ ] / [x]
+due_dates   = true         # @ after a task: @+3 @-1 @+0 14:00 @2026-12-01
+html        = true         # <  → <small> <sup> <kbd> <span style> <div markdown="1"> <details> …
+inline      = true         # ++ctrl+b++  [?](hint)  [^1]  ==highlight==
+line_starts = true         # at a line start: !!! ??? *[ [^ / //
+links       = true         # ](/  → your pages
+media       = true         # ](/media/  → images
+code        = true         # ```  → language, hl_lines / linenums, md live
+
+[editor.autocomplete]
+# What the editor completes by itself while typing (markdown files only).
+pairs       = true         # ( [ { < " ' ` get their closer; typing the closer steps over it
+wrap        = true         # * _ ~ = and brackets around a selection wrap it
+lists       = true         # Enter continues - lists, 1. numbers, - [ ] tasks, > quotes and : definitions
+fences      = true         # Enter after ```lang adds the closing ```
+tables      = true         # Enter at the end of a | row | adds a row (and |---| under the header); empty row ends it
+notes       = true         # Enter after {{note}} adds {{/note}}
+html        = true         # <small> typed → </small> after the caret
+admonitions = true         # Enter after !!! note / ??? note indents the content by 4 spaces
+
 [api]
 allowed_hosts = ["127.0.0.1", "localhost"]    # Host the server answers to and Origin for /api (against DNS rebinding)
 
