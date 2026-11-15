@@ -14,9 +14,14 @@
 🎬 co všechno markdown umí, ukazují [ukázky](/examples)
 {: .muted }
 
+
 ##.
 {{lang}} {{theme}}
 
+
+##. repozitář
+[code.nolog.cz/hindrich/h6082](https://code.nolog.cz/hindrich/h6082)
+[github.com/manihindrich/h6082](https://github.com/manihindrich/h6082) (mirror)
 ---
 #
 ##. `📅 Dnes`
