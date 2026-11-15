@@ -1,18 +1,23 @@
-#__ h6082
+# h6082
 ![h6082: markdown homepage](/media/h6082-hero.svg)
 
-#++
+---
+#50%
 ## h6082 **a markdown homepage made to measure**
 **A start page you write like notes.**
 Every tab is one file `content/pages/*.md`. Edit it in your own editor, or right here in the browser with a live preview. Save it and it's live, no deploying.
 
-`#` starts a column, `##` a block, and inside go links, tasks, notes, service status or RSS. Features keep growing.
+`#` starts a column, `##` a card, and inside go links, tasks, notes, service status or RSS. Features keep growing.
 /
 
 **No database, no build, no tracking.**
 The look is tuned in one clear TOML file. It all runs in a single lean container, so the hardware needs are modest. Even the proverbial potato will do. The browser downloads nothing from foreign servers, your data stays with you.
 
-#
+#25%
+## Documentation and configuration {.fill}
+{{files system}}
+
+#25%
 ## Author and app {.fill}
 <div class="author" markdown="1">
 <div class="author-avatar"><img src="/static/img/author.webp" width="52" height="52" alt="" decoding="async"></div>
@@ -30,43 +35,28 @@ The look is tuned in one clear TOML file. It all runs in a single lean container
 | version | **1.0** |
 | license | [GPL-3.0](https://code.nolog.cz/hindrich/h6082/src/branch/master/LICENSE) · third parties [?](JetBrains Mono — OFL-1.1\nPython-Markdown — BSD-3-Clause\nPyMdown Extensions — MIT\nPygments — BSD-2-Clause\ndefusedxml — PSF-2.0) |
 
-#__
-/
-#--
+---
+//
+#-
 #+
-## My files
+## Files
 {{files user}}
 /
 ### New file
 {{newfile}}
 
+
 #
-## Documentation and configuration
-{{files system}}
+## 🕓 Recent changes
+{{history 5 demo}}
 
-/
-## ⚡ Quick tips
-| syntax | what it does |
-|:--|:--|
-| `##*` | edit the block right on the page ✎ |
-| `#+` `#-` | wider / narrower column |
-| `#__` | full-width band |
-| `/` | empty line |
-| `- [ ] task` | a task, tick it off right on the page |
-| `[?](text)` | icon with a hint |
+<small>Sample. All versions of a file are in the editor under **history**, with diff and restore.</small>
 
-In the editor ++ctrl+s++ saves, ++ctrl+b++ makes bold. Everything else is shown in the [markdown showcase](/markdown).
 
 #
 ## 📊 Server
 {{sys cpu mem load disk uptime demo}}
 
-<small>Demo with made-up values. Real status: `[system] enabled = true` and the block without `demo`.</small>
+<small>Sample with made-up values. Real status: `[system] enabled = true` and the card without `demo`.</small>
 
-/
-## 🕓 Recent changes
-{{history 5 demo}}
-
-<small>Demo. All versions of a file are in the editor under **history**, with diff and restore.</small>
-
-#--
+#-

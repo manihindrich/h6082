@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://h.6082.cz/"><b>▶&nbsp;&nbsp;Try the live demo</b></a>
+  <a href="https://h.6082.cz/"><b>▶&nbsp;&nbsp;Try the LIVE DEMO</b></a>
   &nbsp;&nbsp;|&nbsp;&nbsp;
   <a href="#quick-start">Quick start</a>
   &nbsp;·&nbsp;
@@ -33,14 +33,14 @@
 </p>
 
 <p align="center">
-  <a href="https://h.6082.cz/"><img src="docs/screenshot-dark.png" alt="h6082 demo tab in the dark obsidian theme" width="100%"></a>
+  <a href="https://h.6082.cz/"><img src="docs/screenshot-demo.png" alt="the demo tab: a personal board with tasks, bookmarks, service status, server stats and news" width="100%"></a>
 </p>
 
 ---
 
 ## Markdown in, start page out
 
-Every file in `content/pages/` is a tab. A `#` starts a column, a `##` a framed block — everything else is
+Every file in `content/pages/` is a tab. A `#` starts a column, a `##` a framed card — everything else is
 the markdown you already know.
 
 ```markdown
@@ -77,38 +77,40 @@ That is the whole format. Save the file and every open browser tab refreshes its
 
 | | |
 |---|---|
-| **Content** | tabs from md files · invisible columns and framed blocks · tables, callouts, code with highlighting, footnotes, keys, abbreviations · own images · protected e-mail addresses |
+| **Content** | tabs from md files · invisible columns and framed cards · tables, callouts, code with highlighting, footnotes, keys, abbreviations · own images · protected e-mail addresses |
 | **Live widgets** | HTTP/TCP status dot next to any link · RSS and Atom feeds · server stats (CPU, RAM, temperature, disks) · demo mode with made-up data for public pages |
 | **Editing** | web editor with live preview and autosave · tasks you tick, add and delete right on the page · notes that grow as you type · version history with diff and restore · trash instead of delete |
 | **Look** | 12 themes (obsidian, nord, dracula, gruvbox, solarized, catppuccin, tokyo night, paper…) plus auto light/dark · your own themes in a few lines of TOML · layout, font and colours configurable |
 | **Languages** | UI and built-in documentation in English and Czech · translations of your own tabs side by side (`name.cs.md`) |
 | **Operations** | one small container · instant live reload · update-safe: built-in content ships in the image, your data stays in `content/` |
 
-<p align="center">
-  <img src="docs/screenshot-light.png" alt="the same tab in the light catppuccin latte theme" width="100%">
-  <br><sub>The same tab in the light <i>catppuccin latte</i> theme.</sub>
-</p>
-
 ## A look inside
 
 The documentation is not a wiki somewhere else — it is part of the page, written in the same markdown.
 
 <p align="center">
-  <img src="docs/screenshot-h6082.png" alt="the h6082 page: overview, theme and language, your files, editor, installation and security" width="100%">
-  <br><sub><b>h6082</b> — the control page at the top right: overview, theme and language pickers, your files with
-  editor links, installation, maintenance and security notes.</sub>
+  <br><sub><b>examples</b> — animated scenes: markdown is typed line by line and the page builds itself below it.</sub>
+  <img src="docs/examples.gif" alt="the examples tab: an editor types markdown and the page builds itself next to it" width="100%">
 </p>
 
 <p align="center">
-  <img src="docs/screenshot-markdown.png" alt="the markdown tab: every element with a live example and its source" width="100%">
-  <br><sub><b>markdown</b> — every element with a live example next to its source: blocks, text styles, links,
-  tasks, tables, code, callouts, notes, service status, server stats, history and RSS.</sub>
+  <br><sub><b>editor</b> — highlighting, shortcuts, suggestions, autosave and a live preview; history, rename, hide and delete in the bar.</sub>
+  <img src="docs/screenshot-editor.png" alt="the built-in editor: markdown source on the left, live preview on the right" width="100%">
 </p>
 
 <p align="center">
-  <img src="docs/screenshot-config.png" alt="the config tab: file layout, endpoints, security and every config option" width="100%">
-  <br><sub><b>config</b> — operation and configuration: file layout, updates, endpoints, security and every
-  option of <code>config.toml</code> with its default.</sub>
+  <br><sub><b>settings</b> — behind the gear at the top right: language and theme, your files, documentation and configuration.</sub>
+  <img src="docs/screenshot-settings.png" alt="the settings page: overview, language and theme, files, recent changes and server" width="100%">
+</p>
+
+<p align="center">
+  <br><sub><b>markdown</b> — every element with a short description, a small live example and copyable source.</sub>
+  <img src="docs/screenshot-markdown.png" alt="the markdown page: every element with a short description, a live example and its source" width="100%">
+</p>
+
+<p align="center">
+  <br><sub><b>documentation</b> — requirements, installation, operation, security, the editor and every option of <code>config.toml</code>.</sub>
+  <img src="docs/screenshot-documentation.png" alt="the documentation page: requirements, installation, operation, security and every config option" width="100%">
 </p>
 
 ## Quick start
@@ -120,7 +122,7 @@ docker compose up -d --build
 ```
 
 Open <http://127.0.0.1:8088>. The first start creates `content/` with a default configuration and a demo
-tab to play with. The full documentation lives inside the app: open the **h6082** tab at the top right.
+tab to play with. The full documentation lives inside the app: open **settings** (the gear at the top right) → **documentation**.
 
 ### Settings (`.env`)
 
@@ -169,7 +171,7 @@ theme and language — stored only in their own browser. That is exactly how the
 [live demo](https://h.6082.cz/) runs: read-only container, no volume, no secrets.
 
 `H6082_DEMO=1` goes one step further: still nothing is written on the server, but visitors can edit pages,
-tick tasks, write notes and change `##*` blocks. Their changes live only in their own browser until they
+tick tasks, write notes and change `##*` cards. Their changes live only in their own browser until they
 reset the demo; features the demo can't do stay visible, dimmed, with a hint.
 
 ## Under the hood

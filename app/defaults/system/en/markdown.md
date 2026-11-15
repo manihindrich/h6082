@@ -1,25 +1,50 @@
-#__
-/
+#
+##.
+{{examples}}
 
-# Structure
-## `Structure`
+---
+#
+##. `Structure`
 
+---
+#
 ## Tabs
 Every file `content/pages/*.md` is one tab in the top bar.
-Link to another tab: [documentation](/docs)
 
-```md
-[documentation](/docs)
-```
 The tab name is the file name without `.md`. A translation is a file `name.cs.md` or `name.en.md` and is shown according to the selected language.
 
 - user tabs are on the left, their order is set by `[tabs] order`
 - hidden tabs (`[tabs] hidden`) are reachable via `/<name>`
 - the first user tab is at `/`
-- create a new file on the [h6082](/h6082) page
+- create a new file on the [settings](/settings) page
+- a link to another tab is a plain link to `/<name>`:
+
+```md
+[documentation](/documentation)
+```
 
 ## Columns
-Example: this whole page. Every column starts with a `#` line.
+A `#` line starts a new column, `---` a new row of columns. This whole page is built that way.
+{{example columns.md}}
+| syntax | result |
+|---|---|
+| `#` | column |
+| `#+` | column 1.5× wider |
+| `#++` | column 1.75× wider |
+| `#-` | narrow column, half width |
+| `#--` | very narrow column, quarter width |
+| `#1.2` · `#0,8` | custom width ratio (decimal point or comma) |
+| `#120px` · `#12em` · `#30%` | fixed width, the other columns in the row share the rest; percentages include the gaps, so `#25%` `#25%` `#50%` fill the row exactly |
+| `---` | new row of columns (the line right before `#`); a lone `#` in a row is a full-width band |
+| ` ##. heading ` | column heading without a frame, see Plain card |
+
+- the text after `#` only helps you find your way in the file, it is not shown on the page
+- widths are relative: the numbers in a row set the ratio, `#++` next to `#-` is 3.5× wider; narrow columns suit quick links or service status
+- a column needs at least its number × `[layout] column_min_width`; what does not fit wraps to the next row and stretches
+- the gap between `---` rows is the same as between columns (`[layout] row_gap`); a `/` line between `---` and `#` adds more
+- a `---` not followed by `#` stays a horizontal line in the card
+- number of columns: window width, or `[layout] columns_fixed`
+- `#` inside a code block is ignored
 
 ```md
 # Dev
@@ -31,207 +56,229 @@ Example: this whole page. Every column starts with a `#` line.
 #- Narrow column
 ## Quick links
 …
-#__ Full-width band
+---
+# Full-width band
 ## News
 …
 ```
-| syntax | result |
-|---|---|
-| `#` | column |
-| `#+` | column 1.5× wider |
-| `#++` | column 2× wider |
-| `#-` | narrow column, half width |
-| `#--` | very narrow column, quarter width |
-| `#__` | full-width band below the previous columns |
-| `` ## `heading` `` | column heading without a frame (a block with only a title, see Column heading) |
 
-- the text after `#` only helps you find your way in the file, it is not shown on the page
-- widths are relative: `#++` next to `#-` is four times wider; narrow columns suit quick links or service status
-- columns that do not fit wrap to the next row and stretch
-- number of columns: window width, or `[layout] columns_fixed`
-- `#` inside a code block is ignored
+## Hidden notes
+A line starting with `//` is not rendered on the page.
+{{example hidden-notes}}
+Handy for reminders in the file. Inside a code block and in the middle of a line, `//` is plain text.
 
-## Blocks
-Example: every framed box on this page.
+```md
+// a note just for me
+```
+
+#
+## Cards
+`## Title` creates a framed card, like every box on this page.
+{{example cards.md}}
+Everything up to the next `##` or `#` belongs to the card.
+Content before the first `##` in a column forms a card without a title, and so does a bare `##` without text.
+`## Title {.fill}` stretches the card to the height of the tallest column in the row, so neighbouring cards end at the same level (the Author card on the [settings](/settings) page).
 
 ```md
 ## Repos
 - [GitHub](https://github.com)
 ```
-`## Title` creates a framed block. Everything up to the next `##` or `#` belongs to it.
-Content before the first `##` in a column forms a block without a title.
-`## Title {.fill}` stretches the block to the height of the tallest column in the row, so neighbouring blocks end at the same level (the Author and app block on the [h6082](/h6082) page).
 
-## Column heading
-Example: the yellow headings `Structure`, `Text`, `Blocks`… above the columns of this page.
+## Plain card
+`##.` instead of `##` draws a card without a frame and background, like the yellow row headings on this page.
+{{example plain-card}}
+Handy for naming a column, but it can have content too, e.g. text right on the page. A bare `##.` without text = content without a frame or heading.
+`code` in any heading has no frame of its own, only its colour stays.
 
 ```md
 # Structure
-## `Structure`
+##. `Structure`
 
 ## Tabs
 …
 ```
-A block that has only a title and nothing below it is drawn as a heading without a frame and background. Handy for naming a column.
-`code` in any heading has no frame of its own, only its colour stays.
 
-## Editable blocks
-Example: in the [demo-student](/demo-student) tab, the blocks This week, Exam period, Bachelor's thesis and Glossary of concepts have ✎.
+## Editable cards
+`##*` instead of `##` marks a card you can edit right on the page, without opening the editor.
+{{example editable-card}}
+Handy for small ongoing things: lists, tables, short texts.
+
+- on hover a ✎ appears at the top right, a click opens the card's markdown in place
+- ++ctrl+enter++ saves, ++esc++ cancels; smart typing and editor shortcuts work
+- only this card is saved, the rest of the file stays unchanged
+- if the card was changed elsewhere in the meantime, saving is refused and nothing is overwritten
+- the title and new cards are changed in the editor; works only for your tabs and with the editor password
 
 ```md
 ##* Shopping list
 - milk
 - bread
 ```
-`##*` instead of `##` marks a block that can be edited right on the page, without opening the editor. Handy for small ongoing things: lists, tables, short texts.
 
-- on hover a ✎ appears at the top right, a click opens the block's markdown in place
-- ++ctrl+enter++ saves, ++esc++ cancels; smart typing and editor shortcuts work
-- only this block is saved, the rest of the file stays unchanged
-- if the block was changed elsewhere in the meantime, saving is refused and nothing is overwritten
-- the title and new blocks are changed in the editor; works only for your tabs and with the editor password
+#
+##+ Foldable cards
+A click on the heading folds the card and it stays folded next time. Try it on this card.
+{{example foldable}}
+`##-` instead of `##` is a card folded from the start, `##+` unfolded but foldable. A click on the heading (or ++enter++ on it) toggles it. The browser remembers the state per page and card, nothing is written to the file. Combines with `{.fill}` or `{.mobile}`.
+
+```md
+##- Archive
+- old links
+
+##+ This week
+- …
+```
 
 ## Subheadings
-### Languages
-- [Rust](https://doc.rust-lang.org/std/)
-- [Python](https://docs.python.org/3/)
-
-### Tools
-- [Docker](https://docs.docker.com)
+`###` structures the content inside a card.
+{{example subheadings}}
+The heading and the content below it are slightly indented (`[layout] h3_indent`, `content_indent`).
 
 ```md
 ### Languages
 - [Rust](https://doc.rust-lang.org/std/)
 ```
-Structure the content inside a block. The heading and the content below it are slightly indented (`[layout] h3_indent`, `content_indent`).
 
 ## Smaller headings
-#### level 4 caption
-##### level 5 caption
-###### level 6 caption
+`####` to `######` are small muted headings for little captions.
+{{example subheadings}}
+They have no indentation. Look: `[style.h4]` to `[style.h6]`.
 
 ```md
 #### level 4 caption
 ##### level 5 caption
 ```
-Small muted headings without indentation, handy for little captions. Look: `[style.h4]` to `[style.h6]`.
 
 ## Lines and paragraphs
-First line
-second line
-/
-after an empty line
-
-New paragraph.
-
-```md
-First line
-second line
-/
-after an empty line
-
-New paragraph.
-```
+Every line in the file is a line on the page, an empty line starts a paragraph.
+{{example lines}}
 - ++enter++ = new line, empty line = new paragraph with a gap
 - a line with only `/` inserts an empty line, `//` two, `///` three…
-- `/` outside a block (right below `#`, or above `##`) makes a gap between blocks
+- `/` outside a card (right below `#`, or above `##`) makes a gap between cards, between `---` and `#` a gap between rows of columns
 - classic markdown behaviour (lines are joined) is restored by `[markdown] line_breaks = false`
 
-No empty line is needed before a list, table, quote or code block, it is added automatically.
-
-## Hidden comments
-This block contains a comment you cannot see.
-// this is not shown on the page
+No empty line is needed before a list, table, quote, code block or heading, nor after a table; it is added automatically.
 
 ```md
-// a note just for me
+First line
+second line
+/
+after an empty line
+
+New paragraph.
 ```
-A line starting with `//` is not rendered. Handy for reminders in the file. Inside a code block and in the middle of a line, `//` is plain text.
 
-# Text
-## `Text`
+---
+#
+//
+##. `Text`
 
+---
+#
 ## Font styles
-**bold** · *italic* · ***bold italic*** · ~~strikethrough~~
+Bold, italic and strikethrough.
+{{example type}}
+The underscore variants work too: `__bold__` and `_italic_`.
+In the editor: ++ctrl+b++, ++ctrl+i++, ++ctrl+shift+x++.
 
 ```md
 **bold** · *italic* · ***both*** · ~~strikethrough~~
 ```
-The underscore variants work too: `__bold__` and `_italic_`.
-In the editor: ++ctrl+b++, ++ctrl+i++, ++ctrl+shift+x++.
 
 ## Highlight
-Text with a ==highlighted part==.
+`==text==` puts a highlighter-style background behind a span.
+{{example type}}
+Colour: `mark_bg` in the theme, look: `[style.highlight]`. In the editor: ++ctrl+shift+h++.
 
 ```md
 Text with a ==highlighted part==.
 ```
-Colour: `mark_bg` in the theme, look: `[style.highlight]`. In the editor: ++ctrl+shift+h++.
 
 ## Inline code
-The command `docker ps` or `#!python print("hi")`
+Text between backticks is code right in the line.
+{{example inline-code}}
+`#!language` at the start turns on syntax highlighting.
+A backtick inside code: ``` `` a`b `` ```. In the editor: ++ctrl+e++.
 
 ```md
 `docker ps`
 `#!python print("hi")`
 ```
-`#!language` at the start turns on syntax highlighting.
-A backtick inside code: ``` `` a`b `` ```. In the editor: ++ctrl+e++.
 
 ## Keys
-++ctrl+shift+t++ · ++alt+tab++ · ++cmd+space++ · ++f5++
+`++ctrl+b++` draws a keyboard shortcut.
+{{example keys}}
+Keys are joined with `+`. Known names (`ctrl`, `alt`, `shift`, `cmd`, `win`, `tab`, `esc`, `up`, `f1`–`f24`, `page-up`, …) become key labels.
 
 ```md
 ++ctrl+shift+t++ · ++f5++
 ```
-Keys are joined with `+`. Known names (`ctrl`, `alt`, `shift`, `cmd`, `win`, `tab`, `esc`, `up`, `f1`–`f24`, `page-up`, …) become key labels.
 
 ## Hints
-An icon with a hint [?](Shows on hover or on tap.) and with a custom icon [★](?Any character instead of ⓘ.)
+`[?](text)` is an icon with a hint that shows on hover.
+{{example keys}}
+On mobile it shows on tap. `\n` in the text breaks the line. Any character can replace ⓘ (`[★](?…)`).
+Look: `[style.tip]`. `[?](https://…)` stays a plain link.
 
 ```md
 [?](hint text)
 [★](?hint text)
 ```
-The hint shows on hover, on mobile on tap. `\n` in the text breaks the line.
-Look: `[style.tip]`. `[?](https://…)` stays a plain link.
 
+#
 ## Abbreviations
-Configuration in TOML, styles in CSS.
+`*[TOML]: …` explains an abbreviation on hover.
+{{example footnotes}}
+The definition can be anywhere in the column and applies to the whole column.
 
 ```md
 Configuration in TOML.
 *[TOML]: Tom's Obvious Minimal Language
 ```
-Hover over an abbreviation. The definition can be anywhere in the column and applies to the whole column.
-
-*[TOML]: Tom's Obvious Minimal Language
-*[CSS]: Cascading Style Sheets
 
 ## Brackets
-Text (in parentheses) and [square] and {curly}.
+Brackets can be coloured in the config, e.g. for side remarks (in parentheses).
+
+Each type (`round`, `square`, `curly`, `angle`) has its own section, e.g. `[style.bracket_round] color = "muted"`. The default look is unchanged.
 
 ```md
 Text (in parentheses) and [square] and {curly}.
 ```
-Each bracket type can be coloured in the config, e.g. `[style.bracket_round] color = "muted"` for side remarks. The default look is unchanged.
 
+## Escaping
+A backslash before a character turns its formatting off.
+{{example escaping}}
+Handy when you want to write `*`, `#`, `[` or a backtick as they are.
+
+```md
+\*asterisks\*  \# hash  \[brackets\]
+```
+
+## Inline HTML
+HTML in the text works: superscript and subscript, underline, custom styles.
+{{example html}}
+- `style="…"` on `<span>` or `<div>` = custom CSS (colour, background, border)
+- markdown inside an HTML block is processed only if the block has the attribute `markdown="1"`
+- `<details><summary>` is a foldable block
+
+```html
+<small>small</small> x<sup>2</sup> H<sub>2</sub>O <u>underline</u>
+<span style="background:#a882ff33;border-radius:6px;padding:1px 8px">label</span>
+```
+
+## Gear
+`{{gear}}` puts the settings icon into the text.
+{{example keys}}
+It is the same gear as in the bar, just as an icon (not a link). Handy in instructions and welcome texts.
+
+```md
+under {{gear}} at the top right
+```
+
+#
 ## Alignment and size
-Centred signpost
-{: .center .big }
-
-signature on the right
-{: .right .muted }
-
-```md
-Centred signpost
-{: .center .big }
-
-signature on the right
-{: .right .muted }
-```
-A `{: … }` line right below a paragraph adds classes to it:
-
+A `{: … }` line right below a paragraph aligns or enlarges it.
+{{example alignment}}
 | class | result |
 |:--|:--|
 | `.center` / `.right` | centre / right alignment |
@@ -239,126 +286,142 @@ A `{: … }` line right below a paragraph adds classes to it:
 | `.small` | smaller font |
 | `.muted` | muted colour |
 
-Classes can be combined and work for headings and lists too. Custom style: `{: style="…" }`, see Attributes.
-
-## Inline HTML
-<small>small text</small> · x<sup>2</sup> · H<sub>2</sub>O · <u>underline</u>
-
-```html
-<small>small</small> x<sup>2</sup> H<sub>2</sub>O <u>underline</u>
-```
-Markdown inside an HTML block is processed only if the block has the attribute `markdown="1"`.
-
-## Escaping
-\*asterisks\*, \# hash, \[brackets\], \`backtick\`
+Classes can be combined and work for headings and lists too. On a heading, `{: … }` can be at the end of the line or on the line below. Custom style: `{: style="…" }`, see Attributes.
 
 ```md
-\*asterisks\*  \# hash  \[brackets\]
+Centred signpost
+{: .center .big }
+
+signature on the right
+{: .right .muted }
 ```
-A backslash before a character turns its formatting off.
+
+## Phone or computer only
+`{.mobile}` and `{.desktop}` show a card or paragraph only on a phone, or only on a computer.
+{{example devices}}
+The breakpoint is 640 px, the same as for stacking columns. After a `##` heading it applies to the whole card, below a paragraph only to that paragraph.
+
+```md
+## Tip for the phone {.mobile}
+…
+
+A paragraph for the computer only.
+{: .desktop }
+```
+
+## Attributes
+`{…}` after an element adds a colour, class, anchor or another attribute.
+{{example attributes}}
+You can add `{#id}`, `{.class}`, `{key=value}` and `{: style="…" }` after an element. On a heading, write the attributes at the end of the line or on a separate line right below it.
+
+```md
+Paragraph.
+{: style="color:#00bfa5" }
+**text**{: style="color:#ff9100" }
+[maps](https://www.openstreetmap.org){target=_blank}
+```
 
 ## Footnotes
-A claim with a footnote[^1] and another one[^long].
+`[^1]` in the text refers to a note listed at the bottom.
+{{example footnotes}}
+Footnotes appear at the end of the last card in the column. The identifier can be a word too (`[^source]`).
 
 ```md
 A claim with a footnote[^1].
 [^1]: Footnote text.
 ```
-Footnotes appear at the end of the last block in the column.
 
-[^1]: Footnote text.
-[^long]: The identifier can be a word, too.
+---
+#
+//
+##. `Links and images`
 
-# Links and lists
-## `Links and lists`
-
+---
+#
 ## Links
-[plain link](https://example.com) · [with a tooltip](https://example.com "title on hover") · [another tab](/docs) · [with a reference][ref]
-
-[ref]: https://example.com
+`[text](address)` is a link, optionally with a title or with the address set aside.
+{{example links}}
+External links open in a new tab (`[page] links_new_tab`). In the editor: ++ctrl+k++, or paste a URL over selected text.
 
 ```md
 [text](https://example.com)
 [text](https://example.com "tooltip")
-[text](/docs)
+[text](/documentation)
 [text][ref]
 [ref]: https://example.com
 ```
-External links open in a new tab (`[page] links_new_tab`). In the editor: ++ctrl+k++, or paste a URL over selected text.
 
 ## Autolinks
-<https://example.com> · https://example.com/path · <user@example.com>
+A bare address in the text is a link by itself.
+{{example links}}
+It is shown without `https://` and the trailing slash. A link to `http://` gets a warning mark, except for addresses on the local network (`192.168.…`, `*.local`, `*.lan`, `localhost`).
 
 ```md
 <https://example.com>
 https://example.com/path
 <user@example.com>
 ```
-A bare address is shown without `https://` and the trailing slash. A link to `http://` gets a warning mark, except for addresses on the local network (`192.168.…`, `*.local`, `*.lan`, `localhost`).
 
+#
 ## Protected e-mail
-Write to me: {{email name example.com}}
+`{{email name domain}}` shows an e-mail address that bots will not find in the file.
+{{example links}}
+Name and domain are written separately, so neither the md nor the HTML contains the address with an at sign. JavaScript in the browser builds the readable address and the `mailto:` link. Works anywhere in the text.
 
 ```md
 {{email name example.com}}
 ```
-Name and domain are written separately, so neither the md nor the HTML contains the address with an at sign. JavaScript in the browser builds the readable address and the `mailto:` link. Works anywhere in the text.
 
 ## Images
-![h6082](/media/demo-hero.svg)
-
-![logo](/static/img/logo.svg){width=20} icon before text · [![](/static/img/logo.svg){width=14} link with an icon](https://example.com)
-
-```md
-![h6082](/media/demo-hero.svg)
-![logo](/media/icon.svg){width=20}
-[![](/media/icon.svg){width=14} text](https://…)
-```
+`![description](/media/file.svg)` embeds an image, a banner or a small icon.
+{{example images.md}}
 - save your own images to `content/media/` and embed them via `/media/<file>` (`svg png jpg webp gif avif ico`)
-- an image alone in a paragraph stretches to the block width
-- a block without a title that contains only an image is drawn without a frame, as a banner (the header of the h6082 page)
+- an image alone in a paragraph stretches to the card width
+- a card without a title that contains only an image is drawn without a frame, as a banner (the header of the settings page)
 - set a smaller size with the `{width=…}` attribute
 - images from the web (`https://…`) work too, but the browser loads them from a foreign server
 
 A script inside an SVG never runs, not even when the image is opened directly.
 
-## Bullet lists
-- item
-- item
-  - nested
-    - next level
-
 ```md
-- item
-  - nested
+![valley](/media/foto-den.svg)
+![icon](/media/ikona.svg){width=20}
+[![](/media/ikona.svg){width=14} text](https://…)
 ```
+
+---
+#
+//
+##. `Lists and tasks`
+
+---
+#
+## Bullet lists
+`-` at the start of a line is a list item.
+{{example bullets}}
 Indent by 2 spaces to nest, in the editor ++tab++. Bullets are drawn as `›` (`[style.list] marker`). `*` and `+` work too.
 In the editor: ++ctrl+shift+8++.
 
-## Numbered lists
-1. first
-2. second
-   1. nested
-3. third
-
 ```md
-1. first
-2. second
-   1. nested
+- item
+  - nested
 ```
+
+## Numbered lists
+`1.` at the start of a line is a numbered item.
+{{example numbered}}
 ++enter++ at the end of an item adds the next number. A list can start at any number. In the editor: ++ctrl+shift+7++.
 
-## Tasks
-- [x] done
-- [ ] in progress
-  - [x] subtask
-  - [ ] subtask
-
 ```md
-- [x] done
-- [ ] in progress
-  - [ ] subtask
+1. first
+2. second
+   1. nested
 ```
+
+#
+## Tasks
+`- [ ]` is a task with a checkbox, `- [x]` a done task.
+{{example tasks}}
 In your tabs, tasks can be edited right on the page:
 - a click on the checkbox ticks or unticks the task
 - ✕ (on hover) deletes the task including its subtasks
@@ -366,41 +429,66 @@ In your tabs, tasks can be edited right on the page:
 
 The change is written to the md file at once. Here in the documentation the tasks are read-only. In the editor: ++ctrl+shift+9++.
 
+```md
+- [x] done
+- [ ] in progress
+  - [ ] subtask
+```
+
 ## Definition list
-TTL
-: how long a DNS record is valid
-
-MTU
-: max. packet size
-: typically 1500 B
+A term and `: explanation` below it.
+{{example definitions}}
+The term is on one line, the explanation on the next after `: `. There can be several explanations.
 
 ```md
 TTL
 : how long a DNS record is valid
 ```
-The term on one line, the explanation on the next after `: `. There can be several explanations.
 
-# Blocks
-## `Blocks`
+#
+## Due dates
+`@date` at the end of a task shows a due-date label.
+{{example due-dates}}
+| syntax | due |
+|:--|:--|
+| `@2027-03-31` | fixed date |
+| `@2026-11-20 14:00` | date and time |
+| `@+3` · `@-2` | in 3 days · 2 days ago, counted from today (for templates and examples that should not age) |
+| `@+0 14:00` | today at 14:00 |
 
+Within a week the label is relative ("in 2 days", "yesterday"), further out a date. Past due it is red, within 3 days orange, on a done task grey. The browser computes it from today's date; the file keeps what you wrote, so the task can still be ticked and edited.
+
+```md
+- [ ] submit the annual report @2027-03-31
+- [ ] meeting @2026-11-20 14:00
+- [ ] renew the certificate @+2
+```
+
+---
+#
+//
+##. `Card content`
+
+---
+#
 ## Tables
-| service | port | status |
-|:--|--:|:-:|
-| home | 8088 | ✓ |
-| grafana | 3000 | ~~off~~ |
-
-```md
-| service | port | status |
-|:--|--:|:-:|
-| home | 8088 | ✓ |
-```
+Cells are separated by `|`, below the header is a `|---|` row.
+{{example table.md}}
 The separator row sets the alignment: `:--` left, `--:` right, `:-:` centre. Cells may contain inline formatting.
 
-## Code blocks
-```python hl_lines="2"
-def hello(name):
-    return f"hello {name}"
+```md
+| service | port | status |
+|:--|--:|:-:|
+| home | 8088 | ✓ |
 ```
+
+## Code blocks
+Code between ```` ``` ```` is a separate block, coloured by language.
+{{example code-block}}
+- hover over the block: a copy button is at the top right
+- language: `bash`, `python`, `yaml`, `toml`, `json`, `rust`, `nix`, `diff`, …
+- `hl_lines="2 4-6"` highlights lines, `linenums="1"` numbers them
+- colour scheme and line numbers globally: `[code]`
 
 ````md
 ```python hl_lines="2"
@@ -408,78 +496,66 @@ def hello(name):
     return f"hello {name}"
 ```
 ````
-- hover over the block: a copy button is at the top right
-- language: `bash`, `python`, `yaml`, `toml`, `json`, `rust`, `nix`, `diff`, …
-- `hl_lines="2 4-6"` highlights lines, `linenums="1"` numbers them
-- colour scheme and line numbers globally: `[code]`
 
 ## Quotes
-> A short quote or remark.
->> nested quote
+`>` at the start of a line is a quote, `>>` a nested one.
+{{example quotes}}
+++enter++ in the editor continues the quote, on an empty line it ends it.
 
 ```md
 > A short quote or remark.
 >> nested quote
 ```
-++enter++ in the editor continues the quote, on an empty line it ends it.
 
+#
 ## Callouts
-> [!note]
-> Without a title, the type is used as the title.
-
-> [!tip] Tip
-> The content can contain **markdown**, `code` and [links](https://example.com).
-
-> [!warning] Warning
-
-> [!danger] Danger
+A quote with a type like `[!tip]` is a coloured box with a title.
+{{example callouts}}
+Types: `note` · `tip` · `info` · `warning` · `danger`. Aliases from Obsidian and GitHub work too (`important`, `caution`, `question`, `bug`, `success`, …). Without a title the type is used as the title, a callout without content is just a coloured line.
 
 ```md
 > [!tip] Title
 > content
 ```
-Types: `note` · `tip` · `info` · `warning` · `danger`. Aliases from Obsidian and GitHub work too (`important`, `caution`, `question`, `bug`, `success`, …). A callout without content is just a coloured line.
 
-## Collapsible callouts
-> [!info]- Collapsed (click)
-> Hidden content.
-
-> [!tip]+ Expanded
-> Can be collapsed.
+## Foldable callouts
+`-` or `+` after the type makes the callout foldable.
+{{example foldable-callouts}}
+`-` = folded, `+` = unfolded but foldable.
 
 ```md
-> [!info]- Collapsed
+> [!info]- Folded
 > content
 ```
-`-` after the type = collapsed, `+` = expanded but collapsible.
 
 ## Admonition
-!!! warning "Title"
-    Alternative callout syntax.
+`!!!` is a callout in MkDocs syntax.
+{{example mkdocs}}
+The content is indented by 4 spaces. The result is the same as a callout.
 
 ```md
 !!! warning "Title"
     content indented by 4 spaces
 ```
-The same as a callout, just in MkDocs syntax.
 
+#
 ## Details
-??? note "Collapsed block"
-    The content shows after a click.
-
-???+ tip "Open block"
-    `???+` = expanded by default.
+`???` is a foldable block in MkDocs syntax.
+{{example mkdocs}}
+`???` = folded, `???+` = unfolded. The content is indented by 4 spaces.
 
 ```md
-??? note "Collapsed"
+??? note "Folded"
     content
 ```
 
 ## Note
-{{note}}
-An editable note. The field grows downwards with the text.
-The text is saved back into the md file.
-{{/note}}
+`{{note}}` … `{{/note}}` is a field you type into right on the page.
+{{example note}}
+- the text between the markers is plain text, markdown is not rendered in it
+- in your tabs it saves itself ~0.8 s after the last change, the field grows with the text
+- if the note was changed elsewhere in the meantime, saving is refused and nothing is overwritten
+- writing requires the editor password, here in the documentation it is read-only
 
 ````md
 {{note}}
@@ -487,185 +563,142 @@ milk, bread
 call the plumber
 {{/note}}
 ````
-- the text between `{{note}}` and `{{/note}}` is plain text, markdown is not rendered in it
-- in your tabs you type right on the page and it saves itself ~0.8 s after the last change
-- if the note was changed elsewhere in the meantime, saving is refused and nothing is overwritten
-- writing requires the editor password, here in the documentation it is read-only
 
 ## Divider
-above the line
-
----
-
-below the line
-
-```md
-above the line
-
----
-
-below the line
-```
+`---` between empty lines draws a horizontal line.
+{{example divider}}
 An empty line must precede `---`, otherwise the previous line turns into a heading.
 
-## Attributes
-A paragraph with its own colour.
-{: style="color:#00bfa5" }
-
-**bold orange**{: style="color:#ff9100" }
-
 ```md
-Paragraph.
-{: style="color:#00bfa5" }
-**text**{: style="color:#ff9100" }
+above the line
+
+---
+
+below the line
 ```
-You can add `{#id}`, `{.class}`, `{key=value}` and `{: style="…" }` after an element.
 
-#__
-## `Live widgets`
+---
+#
+//
+##. `Live widgets`
 
-# Monitoring
-## `Monitoring`
-
+---
+#
 ## Service status
-- [GitHub](https://github.com){.check}
-- [Hacker News](https://news.ycombinator.com){.check}
-- [non-existent](https://nonexistent.invalid){.check}
-
-```md
-[GitHub](https://github.com){.check}
-[NAS](http://nas.lan){check="tcp://192.168.1.50:22"}
-```
-A coloured dot shows whether the service responds: 🟢 OK · 🟠 4xx (running, but needs a login etc.) · 🔴 5xx, timeout or unreachable.
+`{.check}` after a link shows with a coloured dot whether the service responds.
+{{example status}}
+| dot | status |
+|:--|:--|
+| 🟢 | OK |
+| 🟠 | 4xx: running, but needs a login etc. |
+| 🔴 | 5xx, timeout or unreachable |
 
 - `{.check}` checks the link address over HTTP(S)
 - `{check="…"}` is a custom target: `https://…` or `tcp://host:port`
 - hover shows the status code, latency or error
 - refreshed every `[checks] interval_s`
+- made-up status for examples: [sample data](/documentation#sample-data)
 
 Checks run from the server in the container. Services on the host: `host.docker.internal:<port>`. The server only checks targets written in md files.
 
-## Server
-{{sys demo}}
-
 ```md
-{{sys}}
-{{sys cpu mem disk}}
-{{sys demo}}
+[GitHub](https://github.com){.check}
+[NAS](http://nas.lan){check="tcp://192.168.1.50:22"}
 ```
+
+#
+## Server
+`{{sys}}` shows the server's CPU, memory and disk usage.
+{{example server}}
 - parts: `cpu` `mem` `swap` `load` `temp` `uptime` `disk`, without parameters all are shown
 - values refresh every `[system] interval_s` seconds
 - the bar is orange from 70 %, red from 90 %
 
-> [!info] Demo mode
-> The example above shows **made-up values** (`demo`), generated by the browser; the server is not asked at all.
-> Real values: set `[system] enabled = true` in `config.toml` and remove `demo` from the block. Off by default, because `/api/sys` is visible to anyone who can see the page.
-
-# Feeds and history
-## `Feeds and history`
-
-## RSS
-{{rss https://news.ycombinator.com/rss 5}}
+> [!info] Turning it on
+> Set `[system] enabled = true` in `config.toml`. Off by default, because `/api/sys` is visible to anyone who can see the page. Made-up values for examples: [sample data](/documentation#sample-data).
 
 ```md
-{{rss https://news.ycombinator.com/rss 5}}
+{{sys}}
+{{sys cpu mem disk}}
 ```
+
+## RSS
+`{{rss URL}}` lists the latest articles from a feed.
+{{example rss}}
 - the whole line = one feed, the number = item count (default `[rss] default_limit`)
 - RSS 2.0, RSS 1.0 and Atom
 - 💬 = link to the comments, if the feed has them
 - the server caches the feed for `[rss] refresh_min` minutes and shows the last known state if the source is down
-
-## Change history
-{{history 5 demo}}
+- made-up titles for examples: [sample data](/documentation#sample-data)
 
 ```md
-{{history}}
-{{history 20}}
-{{history demo-family.md 5}}
+{{rss https://news.ycombinator.com/rss 5}}
 ```
+
+#
+## Change history
+`{{history}}` lists the latest file edits.
+{{example history}}
 - latest changes: time, file, added and removed lines
 - a click opens the diff with an option to restore the version (with the editor password)
 - versions are created automatically by edits from the editor and from elsewhere, edits within 5 minutes are merged
 
-> [!info] Demo mode
-> The example above shows **made-up changes** (`demo`). The real history would show the names of your files and when you edited them. Just remove `demo` from the block.
-
-#+ Editor and demos
-## `Editor and demos`
-
-## Editor suggestions
-{{livedemo 8}}
-{{scene hints.md}}
-##* Dates
-**1 Mar** insurance
-> [!tip] Tip
-> The editor suggests shortcodes too.
-{{rss https://news.ycombinator.com/rss 3}}
-{{/livedemo}}
+The history shows the names of your files and when you edited them. Made-up changes for examples: [sample data](/documentation#sample-data).
 
 ```md
-#        → columns and blocks: #+ #- #__ ## ##* …
-{{       → shortcodes: {{rss URL 5}}, {{note}} …
-> [!     → callouts: tip, warning, danger … folded too
-{.       → classes: .check .center .big .fill …
-](/      → names of your pages
-- [      → a task
+{{history}}
+{{history 20}}
+{{history demo.md 5}}
 ```
-- the list appears only after these openings, not on every word
-- ++arrow-up++ ++arrow-down++ choose, ++enter++ or ++tab++ confirm, ++esc++ closes; without the list ++enter++ works as usual
-- for a shortcode the parameter (`URL`) gets selected after confirming, just type over it
-- works in the editor and when editing a `##*` block on the page, not on touch devices; turn off: `[editor] suggest = false`
 
-## Live demo
-{{livedemo 12}}
-#
-## Links
-- [Maps](https://www.openstreetmap.org)
-#
-## Today
-- [ ] shopping
-{{/livedemo}}
+## Countdown
+`{{countdown date}}` shows how long until a date, or how long since it.
+{{example countdown}}
+| syntax | shows |
+|:--|:--|
+| `{{countdown 2027-01-01}}` | "in 39 days", "tomorrow", "today", "3 days ago" |
+| `{{countdown 2027-01-20 9:00}}` | with a time also "in 5 h" |
+| `{{countdown 2026-11-12 days}}` | just the number of days ("3 days") |
+| `{{countdown +12}}` | 12 days from today |
+
+The browser computes it from its clock and refreshes it every minute, hover shows the full date. Works anywhere in the text.
 
 ```md
-{{livedemo 12}}
-#
-## Links
-- [Maps](https://www.openstreetmap.org)
-#
-## Today
-- [ ] shopping
-{{/livedemo}}
+New Year {{countdown 2027-01-01}}.
+Holiday {{countdown +12}}.
 ```
-- an editor window "types" the markdown between the markers and the preview below redraws after each line
-- the number = length of one run in seconds (default 30), then a 4 s pause and again from the start
-- ❚❚ in the window bar stops the animation; off-screen it waits by itself, with reduced motion turned on in the system the finished state shows right away
-- the content is only a demo: its tasks can't be ticked and don't count among the page's tasks
 
-# Shortcode overview
-## `Shortcode overview`
+---
+#
+//
+##. `Shortcodes`
 
+---
+#
 ## Shortcodes
-Example: the Server, Change history and RSS blocks on the left.
+A line containing **only** a shortcode is replaced by generated content, e.g. the Server, Change history and RSS cards above.
+
+- `{{files}}`: list of files with *view* and *edit* buttons. `user` = only yours, `system` = documentation, configuration and markdown.
+- `{{newfile}}`: form for a new `.md` file
+- `{{theme}}`: theme tiles, a click saves `[theme] default`
+- `{{lang}}`: language switch, saves `[page] lang`
+- `{{email name domain}}`: protected e-mail
+- `{{countdown date}}`: countdown to or since a date
+- `{{gear}}`: settings gear in the text
+
+`{{email}}`, `{{countdown}}` and `{{gear}}` also work mid-line. Shortcodes are not executed inside a code block.
 
 ```md
 {{files}}
 {{newfile}}
 {{rss URL [count]}}
-{{sys [parts…] [demo]}}
-{{history [file] [count] [demo]}}
+{{sys [parts…]}}
+{{history [file] [count]}}
 {{note}} … {{/note}}
-{{livedemo [seconds]}} … {{/livedemo}}
 {{theme}}
 {{lang}}
 {{email name domain}}
+{{countdown date [time] [days]}}
+{{gear}}
 ```
-A line containing **only** a shortcode is replaced by generated content.
-
-- `{{files}}`: list of files with *view* and *edit* buttons. `user` = only yours, `system` = documentation, configuration and markdown.
-- `{{newfile}}`: form for a new `.md` file
-- `{{livedemo [seconds]}} … {{/livedemo}}`: an animated editor window with a live preview, see [Live demo](#live-demo)
-- `{{theme}}`: theme tiles, a click saves `[theme] default`
-- `{{lang}}`: language switch, saves `[page] lang`
-- `{{email name domain}}`: protected e-mail, the only one that also works mid-line
-
-Shortcodes are not executed inside a code block.
+#-

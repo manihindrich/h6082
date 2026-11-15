@@ -2,12 +2,12 @@
 # Changes apply after a page reload (no container restart needed).
 # Missing keys take their default value, unknown keys are ignored (warning in the log).
 # On a syntax error the last working configuration stays in effect.
-# Full description: the "documentation" page (content/system/<lang>/docs.md).
+# Full description: the "documentation" page (content/system/<lang>/documentation.md).
 
 [page]
 title         = "h6082"    # browser tab title (with several tabs: "<tab> · <title>")
 favicon       = ""         # browser tab icon: "" = the built-in purple diamond, or one character / emoji ("🚀")
-lang          = "en"       # UI and built-in pages language: en | cs (also set by the language drop-down on h6082)
+lang          = "en"       # UI and built-in pages language: en | cs (also set by the language drop-down on the settings page)
 links_new_tab = true       # open external links (http/https) in a new tab
 header        = "**h6082** · homepage"   # header on the left of the top bar (inline markdown); "" = none
 live_reload   = true       # the page refreshes itself after an .md / config save
@@ -17,18 +17,15 @@ live_reload   = true       # the page refreshes itself after an .md / config sav
 # name.cs.md / name.en.md is a translation of name.md, shown according to [page] lang.
 # User tabs are on the left; the about tab ([page] about_tab) is on the right.
 order       = ["demo"]   # order from the left, e.g. ["dev", "infra"]; other files follow alphabetically
-hidden      = []           # hidden from the bar, still reachable via /<name> and from the h6082 page
+hidden      = []           # hidden from the bar, still reachable via /<name> and from the settings page; also the eye icon in the editor
+examples    = true         # the examples page (/examples) as the first tab on the left ("examples" in order moves it);
+                           # also the switch on the markdown page
 show_single = true         # show the bar even with a single user tab
 
 [tabs.labels]
 # tab labels (default = file name): a plain string, or one label per language.
 # The file name stays one; the label works as a per-language alias in the tab bar.
-demo-admin             = { en = "demo · sysadmin",   cs = "demo · správce serverů" }
-demo-designer        = { en = "demo · designer",   cs = "demo · designérka" }
-demo-cafe           = { en = "demo · café",       cs = "demo · kavárna" }
-demo-key-worker = { en = "demo · key worker", cs = "demo · klíčový pracovník" }
-demo-family            = { en = "demo · family",     cs = "demo · rodina" }
-demo-student           = { en = "demo · student",    cs = "demo · studentka" }
+# recepty = { en = "recipes", cs = "recepty" }
 
 [editor]
 # Web editor for files (/edit/<file>). The editor password is set in .env (H6082_EDITOR_PASSWORD),
@@ -50,14 +47,14 @@ timeout_s  = 4             # timeout of a single check
 verify_tls = false         # false = self-signed certificates pass too (homelab)
 
 [rss]
-# Feed block: a line {{rss https://… [count]}}
+# A feed in a card: a line {{rss https://… [count]}}
 enabled       = true
 refresh_min   = 15         # how long a feed stays cached
 timeout_s     = 8          # feed download timeout
 default_limit = 10         # number of items when not given
 
 [theme]
-# The active theme is `default`. The picker on the h6082 page (Theme block) writes here.
+# The active theme is `default`. The theme picker on the settings page writes here.
 # Built-in: obsidian (= [colors] below), nord, dracula, gruvbox-dark, solarized-dark,
 # catppuccin-mocha, tokyo-night, obsidian-light, gruvbox-light, solarized-light,
 # catppuccin-latte, paper; "auto" = follows the OS (auto_dark / auto_light).
@@ -77,12 +74,12 @@ auto_light = "obsidian-light"  # theme for "auto" with a light OS
 
 [history]
 # Change history: the state of a file before a change is stored in content/.history/.
-# List of versions, diff and restore: the "history" link in the editor. Block: {{history [file] [count] [demo]}}.
+# List of versions, diff and restore: the "history" link in the editor. On a page: {{history [file] [count] [demo]}}.
 #
 # DEMO MODE: {{history 5 demo}} shows made-up changes (invented files and times) right
 # in the browser, without asking the server. Used in examples (demo, showcase) so the page
 # does not reveal the names of your files and when you edit them.
-# Real history: remove the word `demo` from the block → {{history 5}}.
+# Real history: remove the word `demo` from the line → {{history 5}}.
 enabled      = true
 coalesce_min = 5           # edits within this many minutes of the last version are merged into one
 max_versions = 50          # max. versions per file (the 3 newest always stay)
@@ -96,7 +93,7 @@ max_age_days = 90          # older versions are deleted
 # right in the browser, without asking the server. Works even with enabled = false.
 # Off by default, because /api/sys would reveal server data (load, RAM, disks, uptime,
 # temperature) to anyone with access to the page.
-# Real values: 1) enabled = true  2) remove the word `demo` from the block → {{sys cpu mem disk}}.
+# Real values: 1) enabled = true  2) remove the word `demo` from the line → {{sys cpu mem disk}}.
 enabled    = false
 interval_s = 5             # how often the values refresh
 temps      = []            # thermal zone types to show; [] = automatic (x86_pkg_temp, otherwise the maximum)
@@ -107,36 +104,37 @@ disks = [
 ]
 
 [layout]
-# In a page: "#" starts a column, "#+" / "#++" a 1.5x / 2x wide one, "#-" / "#--" a 0.5x / 0.25x narrow
-# one, "#__" a row across the full width (below the columns before it, above the ones after it). Columns that do not fit
-# wrap to the next line and stretch over the free width. A line starting with "//" is a hidden note;
+# In a page: "#" starts a column, "#+" / "#++" a 1.5x / 1.75x wide one, "#-" / "#--" a 0.5x / 0.25x narrow
+# one, "#1.2" / "#0.8" any relative width. A line "---" right before a column starts a new row of columns
+# (a lone "#" in a row spans the full width). Columns that do not fit wrap to the next line and stretch over the free width. A line starting with "//" is a hidden note;
 # a line of only slashes adds empty lines: "/" one, "//" two, "///" three …
 columns_fixed    = 0               # 0 = number of columns by window width; N = N columns per row
-column_min_width = "240px"         # min. column width in automatic mode (#+ / #++ = 1.5x / 2x)
+column_min_width = "240px"         # min. column width in automatic mode (#+ / #++ = 1.5x / 1.75x)
 page_max_width   = "1600px"        # max. content width ("none" = full width)
 padding          = "14px"          # page margin
 gap              = "12px"          # space between columns and below the tab bar
-block_gap        = "10px"          # vertical space between blocks (##) in a column
-block_padding    = "6px 10px 8px"  # inner padding of a block (CSS padding)
-radius           = "6px"           # corner radius of blocks and tabs
-h3_indent        = "2px"           # indentation of ### headings in a block
+row_gap          = ""              # space between rows of columns ("---"); "" = the same as gap
+block_gap        = "10px"          # vertical space between cards (##) in a column
+block_padding    = "6px 10px 8px"  # inner padding of a card (CSS padding)
+radius           = "6px"           # corner radius of cards and tabs
+h3_indent        = "2px"           # indentation of ### headings in a card
 content_indent   = "10px"          # indentation of the content under ### headings
 
 [font]
 family                = '"JetBrains Mono", ui-monospace, Menlo, Consolas, monospace'  # JetBrains Mono is bundled in the image
 size                  = "13px"     # base font size
 line_height           = "1.4"      # line height
-block_title_transform = "none"     # block titles (##): none | uppercase | lowercase | capitalize
+block_title_transform = "none"     # card titles (##): none | uppercase | lowercase | capitalize
 
 [colors]
 # Colours of the default "obsidian" theme.
 bg           = "#1e1e1e"   # page background
-panel        = "#262626"   # background of blocks and the active tab
-border       = "#363636"   # borders of blocks, tables, code, ---
+panel        = "#262626"   # background of cards and the active tab
+border       = "#363636"   # borders of cards, tables, code, ---
 text         = "#dcddde"   # body text
 muted        = "#999999"   # muted text (bullets, quotes, inactive tabs)
 accent       = "#a882ff"   # active tab line, checkboxes, text selection, footnote links
-h2           = "#a882ff"   # block titles (##)
+h2           = "#a882ff"   # card titles (##)
 h3           = "#c6b6ff"   # ### headings, table headers, definition terms
 link         = "#8a9cff"   # links
 link_hover   = "#b5c0ff"   # links on hover
@@ -167,9 +165,9 @@ size         = ""          # e.g. "1.05em"
 weight       = ""
 line_height  = ""          # e.g. "1.55"; "" = [font] line_height
 space_before = "0"
-space_after  = "0.45em"    # gap between paragraphs (Enter twice)
+space_after  = "0.8em"     # gap between paragraphs (Enter twice); a `/` line = one full empty line
 
-[style.h2]                 # block titles (##)
+[style.h2]                 # card titles (##)
 color          = ""        # "" = theme colour h2
 size           = "1em"
 weight         = "700"
@@ -270,7 +268,7 @@ space_before = "4px"
 space_after  = "4px"
 
 [style.list]               # - and 1. lists
-indent       = "1.2em"
+indent       = "1.6em"
 marker       = "› "        # bullet text: "• ", "– ", "none" = no bullet
 marker_color = "muted"     # bullets and numbers
 item_gap     = "0"         # gap between items
@@ -347,5 +345,5 @@ size   = ""
 
 [code]
 pygments_style = "monokai"   # code block scheme: monokai, dracula, one-dark, nord, gruvbox-dark, material, github-dark, …
-line_numbers   = false       # line numbers in all code blocks
+line_numbers   = false       # line numbers in all code blocks; false = only blocks with linenums="1"
 wrap           = true        # wrap long code lines (false = horizontal scrollbar)

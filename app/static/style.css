@@ -53,6 +53,9 @@ nav.tabs, .topbar .right { display: flex; flex-wrap: wrap; align-items: center; 
 .tab.gear svg { display: block; transition: transform .4s ease; }
 .tab.gear:hover { color: var(--text); }
 .tab.gear:hover svg { transform: rotate(45deg); }
+/* {{gear}}: the same gear inside text (only the icon) */
+.gear-inline { display: inline-block; vertical-align: -.22em; color: var(--muted); line-height: 1; }
+.gear-inline svg { display: block; }
 .tab.about.gear.active { color: var(--accent); }
 .tab.about.active { color: var(--text); }
 select.pick {
@@ -68,19 +71,22 @@ select.pick:hover, select.pick:focus { color: var(--text); border-color: color-m
 /* preview in the editor (iframe ?embed=1) */
 body.embed main { padding: 8px; max-width: none; }
 
-/* ---- columns (#) and blocks (##) ---------------------------------------- */
+/* ---- columns (#) and cards (##) ----------------------------------------- */
 .grid { display: grid; grid-template-columns: var(--grid-cols); gap: var(--gap); align-items: start; }
 .col { display: flex; flex-direction: column; gap: var(--block-gap); min-width: 0; }
-/* a tab: rows of columns (#, #+ 1.5x, #++ 2x, #- 0.5x, #-- 0.25x) and full-width rows (#__). Columns that do not fit
-   wrap to the next line and stretch over the free width. */
-.rows { display: flex; flex-direction: column; gap: var(--gap); }
+/* a tab: rows of columns (`---` starts a new row, [layout] row_gap below the previous one). A column's
+   relative width --g comes from its marker (#+ 1.5, #++ 1.75, #- .5, #-- .25, #1.2 …). Columns that do
+   not fit wrap to the next line and stretch over the free width. */
+.rows { display: flex; flex-direction: column; gap: var(--row-gap); }
 .cols { display: flex; flex-wrap: wrap; gap: var(--gap); align-items: flex-start; }
-.cols > .col { --g: 1; flex: var(--g) 1 calc(var(--col-basis) * var(--g) + var(--gap) * (var(--g) - 1)); }
-.cols > .col.w15 { --g: 1.5; }
-.cols > .col.w2 { --g: 2; }
-.cols > .col.w05 { --g: .5; }
-.cols > .col.w025 { --g: .25; }
-.wide { display: flex; flex-direction: column; gap: var(--block-gap); min-width: 0; }
+/* --g = the column's weight, --w = its share of the free width (the row's weights scaled so the smallest
+   is >= 1). Widths follow the ratio of the weights; a column needs --g × column_min_width before the row wraps. */
+.cols > .col {
+  --g: 1; --w: var(--g);
+  flex: var(--w) 1 calc(var(--gap) * (var(--w) - 1));
+  min-width: min(100%, calc(var(--col-basis) * var(--g) + var(--gap) * (var(--g) - 1)));
+}
+.cols > .col.fixed { flex: 0 0 var(--fw); min-width: 0; max-width: 100%; }   /* #60px */
 .col-gap { flex: none; }
 
 .block {
@@ -89,7 +95,7 @@ body.embed main { padding: 8px; max-width: none; }
   border-radius: var(--radius);
   padding: var(--block-pad);
   min-width: 0;
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere;   /* long links / words wrap instead of leaving a narrow card (anywhere also lets flex items shrink) */
 }
 .block > h2 {
   margin: 0 0 4px;
@@ -103,20 +109,42 @@ body.embed main { padding: 8px; max-width: none; }
   border-bottom: 1px solid color-mix(in srgb, var(--h2) 30%, transparent);
 }
 .block > h2:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: 0; }
-/* a block with only a title (`## Title` and nothing under it): a heading over the column, no frame */
-/* ## Title {.fill}: the block stretches down to the height of the tallest column in its row */
+/* ## Title {.fill}: the card stretches down to the height of the tallest column in its row */
 .cols > .col:has(> .block.fill) { align-self: stretch; }
 .block.fill { flex: 1; }
-.block.title-only { background: none; border-color: transparent; padding-top: 0; padding-bottom: 0; }
-/* a block that is only an image (a banner): no frame, the image keeps the rounded corners */
+/* ##- / ##+ Title: a click on the title folds the card (▾ open, ▸ folded) */
+.block.fold > h2 { cursor: pointer; user-select: none; }
+.block.fold > h2::before { content: "▾"; display: inline-block; width: 1.1em; color: var(--muted); }
+.block.fold.folded > h2::before { content: "▸"; }
+.block.fold.folded > h2 { margin-bottom: 0; padding-bottom: 0; border-bottom: 0; }
+.block.fold.folded > :not(h2) { display: none; }
+.block.fold > h2:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent); outline-offset: 2px; }
+/* {{countdown …}} and task due dates (@2026-11-20): the browser writes the text */
+time.countdown { font-weight: 700; }
+time.due {
+  display: inline-block; margin-left: .4em; padding: 0 .45em; border-radius: 999px; font-size: .85em; line-height: 1.5;
+  color: var(--muted); background: color-mix(in srgb, var(--muted) 14%, transparent);
+}
+time.due.soon { color: var(--callout-warning); background: color-mix(in srgb, var(--callout-warning) 16%, transparent); }
+time.due.over { color: var(--callout-danger); background: color-mix(in srgb, var(--callout-danger) 16%, transparent); }
+.task-list-item:has(> input:checked) > time.due, .task-list-item:has(> p > input:checked) time.due {
+  color: var(--muted); background: none;
+}
+/* ##. Title: a card without frame and background (a column heading, or text straight on the page) */
+.block.plain { background: none; border-color: transparent; padding-top: 0; padding-bottom: 0; }
+/* a card that is only an image (a banner): no frame, the image keeps the rounded corners */
 .block.image-only { background: none; border-color: transparent; padding: 0; }
 .block.image-only img { margin: 0 !important; border-radius: var(--radius) !important; }
 .block-body > :first-child { margin-top: 0; }
 .block-body > :last-child { margin-bottom: 0; }
 
+/* {.mobile} / {.desktop} on a card (## Title {.mobile}) or any element ({: .mobile }): shown only on phones /
+   only on larger screens; the same 640px limit at which columns stack */
+@media (min-width: 641px) { main .mobile { display: none !important; } }
+@media (max-width: 640px) { main .desktop { display: none !important; } }
 @media (max-width: 640px) {
   .grid { grid-template-columns: 1fr; }
-  .cols > .col { flex-basis: 100%; }
+  .cols > .col { flex-basis: 100%; min-width: 0; }
 }
 
 /* ---- subheadings (###, ####) ------------------------------------------- */
@@ -174,8 +202,14 @@ kbd {
 :is(li, dd, blockquote, .callout, .admonition, details, td, th) > p:first-child { margin-top: 0; }
 :is(li, dd, blockquote, .callout, .admonition, details, td, th) > p:last-child { margin-bottom: 0; }
 
+/* a line with keys: the key boxes are taller than text, give them room so lines don't touch */
+:is(p, li, td):has(> kbd) { line-height: 1.9; }
+
 /* ---- lists ------------------------------------------------------------- */
-ul, ol { margin: 2px 0; padding-left: 1.2em; }
+ul, ol { margin: 2px 0; padding-left: var(--list-indent, 1.6em); }
+/* markers sit left of the padding: a numbered list takes [style.list] indent, or more when its widest number
+   needs it ("10. " = 2 digits + dot + space; --ol-digits comes from the renderer), so numbers never leave the card */
+ol { --ol-digits: 1; padding-left: max(var(--list-indent, 1.6em), calc(var(--ol-digits) * 1ch + 2ch)); }
 li { margin: 0; }
 li > ul, li > ol { margin: 0; }
 ul > li::marker { content: "› "; color: var(--muted); }
@@ -273,7 +307,6 @@ details[open] > summary::before { content: "▾ "; }
 /* ---- footnotes --------------------------------------------------------- */
 .footnote { margin-top: 6px; font-size: .85em; color: var(--muted); }
 .footnote hr { margin: 4px 0; }
-.footnote ol { padding-left: 1.4em; }
 .footnote-ref a, .footnote-backref { color: var(--accent); }
 
 /* ---- forms ------------------------------------------------------------- */
@@ -347,6 +380,21 @@ button.tab[aria-pressed="true"] { color: var(--text); background: color-mix(in s
 .ed-src > textarea.plain { color: var(--text); -webkit-text-fill-color: currentColor; background: var(--panel); }
 .ed-src > textarea::selection { background: color-mix(in srgb, var(--accent) 35%, transparent); }
 .ed-src > textarea:disabled { cursor: progress; }
+/* line numbers (the button in the bar): a gutter inside both layers; each number sits at the start of
+   its source line (absolute with a static top), wrapped continuation lines get none */
+.ed-src.nums > textarea, .ed-src.nums > pre { padding-left: calc(10px + 3.4em); }
+.ed-src.nums > pre { counter-reset: ln; }
+.ed-src.nums > pre .ln::before {
+  counter-increment: ln; content: counter(ln); position: absolute; left: 0; width: 3em;
+  text-align: right; color: var(--muted); opacity: .55; font-style: normal; font-weight: 400;
+}
+/* icon buttons in the editor bar (rename, delete, line numbers) */
+button.tab.icon { display: inline-grid; place-items: center; padding: 1px 7px; }
+button.tab.icon svg { display: block; }
+/* editor: tab hidden from the bar ([tabs] hidden) — crossed eye, highlighted; open eye = shown in the bar */
+#hide .i-on, #hide[aria-pressed="true"] .i-off { display: none; }
+#hide[aria-pressed="true"] .i-on { display: block; }
+#hide[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
 .ed-hl .h-col     { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .ed-hl .h-h2      { color: var(--h2); }
 .ed-hl .h-h3      { color: var(--h3); }
@@ -386,9 +434,15 @@ a[data-check]::before {
 a[data-check][data-state="up"]::before   { color: var(--callout-tip); }
 a[data-check][data-state="warn"]::before { color: var(--callout-warning); }
 a[data-check][data-state="down"]::before { color: var(--callout-danger); }
+/* a list item that starts with a status dot: the dot is its bullet (no › right next to it) */
+li:has(> a[data-check]:first-child) { list-style: none; }
+li:has(> a[data-check]:first-child)::marker { content: ""; }
+li:has(> a[data-check]:first-child) > a[data-check]:first-child::before { margin-left: -1.1em; }
 
 /* ---- RSS --------------------------------------------------------------- */
 .rss-list li small { color: var(--muted); }
+/* the age and 💬 stay together at the end of the title */
+.rss-list li small, .rss-list a.rss-c { white-space: nowrap; }
 .rss-list a.rss-c { color: var(--muted); }
 .rss-list a.rss-c:hover { color: var(--link-hover); text-decoration: none; }
 .rss-err { color: var(--callout-danger); }
@@ -448,8 +502,10 @@ a[data-check][data-state="down"]::before { color: var(--callout-danger); }
 .sys-bar.crit i { background: var(--callout-danger); }
 
 /* ---- change history ---------------------------------------------------- */
-.hist-list { list-style: none; padding-left: 0; }
-.hist-list li::marker { content: ""; }
+/* in a card {{history}} is an ordinary list (same indent and bullet as RSS and other lists);
+   the version list on the history page is plain: no bullet, no indent */
+.grid.hist .hist-list { list-style: none; padding-left: 0; }
+.grid.hist .hist-list.hist-list > li::marker { content: ""; }
 .hist-list li.cur { background: color-mix(in srgb, var(--accent) 14%, transparent); border-radius: 3px; }
 .hist-list small, .hist-list time { color: var(--muted); }
 .h-add { color: var(--callout-tip); }
@@ -530,8 +586,8 @@ form.task-add input:hover { border-color: var(--border); }
 form.task-add input:focus { border-color: var(--accent); border-style: solid; }
 form.task-add input::placeholder { color: var(--muted); opacity: .7; }
 
-/* ---- images in blocks -------------------------------------------------- */
-/* an image alone in a paragraph = full block width (hero, banner, screenshot) */
+/* ---- images in cards --------------------------------------------------- */
+/* an image alone in a paragraph = full card width (hero, banner, screenshot) */
 .block-body p > img:only-child:not([width]) { display: block; width: 100%; border-radius: 4px; margin: 2px 0 6px; }
 
 /* ---- language picker ({{lang}}) ---------------------------------------- */
@@ -571,7 +627,7 @@ a.insecure::after {
 .license { color: var(--muted); font-size: .9em; }
 .license strong { color: var(--text); }
 
-/* ---- ##* blocks edited in place ------------------------------------------ */
+/* ---- ##* cards edited in place ------------------------------------------- */
 .block.editable { position: relative; }
 .block.editable > h2 { padding-right: 26px; }
 .block-edit {
@@ -599,9 +655,10 @@ textarea.block-src:focus { outline: none; border-color: var(--accent); }
 /* ---- helper classes for {: .class } attributes in md ------------------------ */
 main .center { text-align: center; }
 main .right { text-align: right; }
-main .big { font-size: 1.2em; }
-main .huge { font-size: 1.6em; line-height: 1.3; }
-main .small { font-size: .85em; }
+/* sizes win over the heading sizes from [style.h2] … (the card title rule comes later in <head>) */
+main :is(.big, .block > .big) { font-size: 1.3em; line-height: 1.35; }
+main :is(.huge, .block > .huge) { font-size: 1.6em; line-height: 1.3; }
+main :is(.small, .block > .small) { font-size: .85em; }
 main .muted { color: var(--muted); }
 
 /* ---- demo mode (H6082_DEMO) ------------------------------------------------ */
@@ -627,6 +684,53 @@ main .muted { color: var(--muted); }
   position: relative; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;
   background: var(--panel); box-shadow: 0 8px 26px rgb(0 0 0 / .18); transition: box-shadow .3s, border-color .3s;
 }
+/* the time line of the demo at the bottom of the window: click = jump there */
+.ld-prog { position: relative; height: 12px; margin-top: -12px; z-index: 2; cursor: pointer; }
+.ld-prog::before, .ld-prog > i { content: ""; position: absolute; left: 0; bottom: 0; height: 3px; transition: height .15s; }
+.ld-prog::before { right: 0; background: color-mix(in srgb, var(--border) 70%, transparent); }
+.ld-prog > i { width: 0; background: var(--accent); }
+.ld-prog:hover::before, .ld-prog:hover > i { height: 6px; }
+.livedemo { cursor: pointer; }
+/* the window icon: the demo as a floating card over the page (editor | preview), the page dimmed but
+   still a little visible around it; ✕, Esc or a click beside it closes */
+.ld-max-btn { padding: 0 8px; color: var(--muted); background: none; display: inline-grid; place-items: center; align-self: stretch; }
+.ld-max-btn:hover { color: var(--text); }
+.ld-max-btn[hidden] { display: none; }
+.ld-max-btn svg { display: block; }
+.ld-max-btn .i-unmax, .livedemo.ld-max .ld-max-btn .i-max { display: none; }
+.livedemo.ld-max .ld-max-btn .i-unmax { display: block; }
+.livedemo.ld-max {
+  position: fixed; inset: 6vh 5vw; z-index: 1000; margin: 0; padding: 14px; background: var(--bg);
+  border: 1px solid var(--border); border-radius: calc(var(--radius) * 2);
+  box-shadow: 0 24px 70px rgb(0 0 0 / .55);
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; font-size: 1rem;
+}
+body.ld-max-open::after {
+  content: ""; position: fixed; inset: 0; z-index: 999; background: rgb(0 0 0 / .5); backdrop-filter: blur(2px);
+}
+.livedemo.ld-max .ld-win { display: flex; flex-direction: column; min-height: 0; }
+.livedemo.ld-max .ld-src { display: block; flex: 1; height: auto; }
+.livedemo.ld-max .ld-stage { min-height: 0; }
+.livedemo.ld-max .ld-preview { height: 100%; max-height: none; }
+body.ld-max-open { overflow: hidden; }
+@media (max-width: 640px) {
+  .livedemo.ld-max { inset: 3vh 3vw; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 2fr) minmax(0, 3fr); }
+}
+.ld-missing { color: var(--callout-warning); font-size: .9em; }
+/* {{examples}} (markdown page header): a button to /examples and the switch for its tab in the bar */
+.examples-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
+.examples-switch { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); cursor: pointer; }
+.examples-switch input { accent-color: var(--accent); cursor: pointer; }
+.examples-switch[aria-disabled="true"], .examples-switch:has(input:disabled) { opacity: .6; cursor: default; }
+/* ```md live: a mini demo right under a code example, small and with a fixed size */
+.livedemo.mini { gap: 6px; margin: 2px 0 8px; font-size: .85em; }
+/* small: only the preview, no buttons; a click anywhere enlarges it to the floating card */
+.livedemo.mini:not(.ld-max) .ld-win { display: none; }
+.livedemo.mini:not(.ld-max) { cursor: zoom-in; }
+.livedemo.mini:not(.ld-max) .ld-preview { height: 13em; padding: 8px; }
+/* [text](#scene:file.md): a link that plays a scene; the one playing now is marked */
+a[href^="#scene:"].ld-cur { color: var(--accent); font-weight: 700; }
+.livedemo.ld-paused .ld-caret { animation: none; }
 .ld-win.ld-sync { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent), 0 8px 26px rgb(0 0 0 / .18); }
 .ld-bar {
   display: flex; align-items: center; gap: 6px; padding: 6px 10px;
@@ -638,9 +742,15 @@ main .muted { color: var(--muted); }
 .ld-file { margin-left: 6px; }
 .ld-saved { margin-left: 12px; font-style: normal; color: var(--accent); opacity: 0; transition: opacity .3s; }
 .ld-saved.on { opacity: 1; }
-.ld-toggle { margin-left: auto; padding: 0 8px; font-size: .85em; color: var(--muted); background: none; }
+.ld-toggle, .ld-skip, .ld-loop { padding: 0 8px; font-size: .85em; color: var(--muted); background: none; }
+.ld-loop { margin-left: auto; }
+.ld-skip, .ld-loop { display: inline-grid; place-items: center; align-self: stretch; }
+.ld-skip svg, .ld-loop svg { display: block; }
+.ld-skip:hover, .ld-toggle:hover, .ld-loop:hover { color: var(--text); }
+.ld-loop[aria-pressed="true"] { color: var(--accent); }
+.ld-skip[hidden], .ld-loop[hidden] { display: none; }
 .ld-src {
-  position: relative; margin: 0; height: max(14em, 30vh); overflow: hidden; padding: 10px 12px;
+  position: relative; margin: 0; height: max(8em, 28vh); height: max(8em, 28svh); overflow: hidden; padding: 10px 12px;
   font: inherit; line-height: 1.5; white-space: pre-wrap; overflow-wrap: break-word; color: var(--text);
 }
 .ld-chg { background: color-mix(in srgb, var(--accent) 22%, transparent); border-radius: 3px; animation: ld-in 1.2s ease; }
@@ -651,11 +761,15 @@ main .muted { color: var(--muted); }
 @keyframes ld-blink { 50% { opacity: 0; } }
 .ld-stage { position: relative; }
 .ld-preview {
-  --col-basis: 150px; min-height: max(18em, 40vh); padding: 12px; font-size: .9em;
+  --col-basis: 150px; padding: 12px; font-size: .9em;
+  /* window + preview fit the browser height; the preview scrolls (by itself to where something happens) */
+  height: max(12em, 44vh); height: max(12em, 44svh); overflow-y: auto; overscroll-behavior: contain;
   border: 1px dashed color-mix(in srgb, var(--accent) 45%, var(--border)); border-radius: var(--radius);
   background: var(--bg);
 }
-.ld-preview .cols { gap: 10px; }
+.ld-preview { --gap: 10px; }   /* columns in the preview: a smaller gap, the width maths uses the same */
+/* rows (---) in the preview: the same space as between its columns */
+.ld-view:has(> .cols) { display: flex; flex-direction: column; gap: 10px; }
 .ld-preview .block { animation: ld-in .35s ease; }
 .ld-preview input[type=checkbox]:disabled { opacity: 1; }
 .ld-preview .block-edit { opacity: .45; }
@@ -665,7 +779,7 @@ main .muted { color: var(--muted); }
 .ld-preview textarea.ld-focus, .ld-preview input.ld-focus { border-color: var(--accent); }
 .ld-mouse {
   position: absolute; left: 0; top: 0; z-index: 3; pointer-events: none; opacity: 0;
-  transform: translate(60%, 90%); transition: transform .8s cubic-bezier(.45, .05, .25, 1), opacity .3s;
+  translate: 60% 90%; transition: translate calc(.8s / var(--ld-speed, 1)) cubic-bezier(.45, .05, .25, 1), opacity .3s;   /* not transform: scale must not move it */
   fill: var(--text); stroke: var(--bg); stroke-width: 1.5; filter: drop-shadow(0 2px 3px rgb(0 0 0 / .35));
 }
 .ld-mouse.on { opacity: 1; }

@@ -1,25 +1,50 @@
-#__
-/
+#
+##.
+{{examples}}
 
-#+ Struktura
-## `Struktura`
+---
+#
+##. `Struktura`
 
+---
+#
 ## Záložky
 Každý soubor `content/pages/*.md` je jedna záložka v horní liště.
-Odkaz na jinou záložku: [dokumentace](/docs)
 
-```md
-[dokumentace](/docs)
-```
 Název záložky je jméno souboru bez `.md`. Překlad je soubor `jmeno.cs.md` nebo `jmeno.en.md` a zobrazí se podle zvoleného jazyka.
 
 - uživatelské záložky jsou vlevo, pořadí určuje `[tabs] order`
 - skryté (`[tabs] hidden`) jsou dostupné přes `/<jméno>`
 - první uživatelská záložka je na `/`
-- nový soubor vytvoříš na stránce [h6082](/h6082)
+- nový soubor vytvoříš na stránce [nastavení](/settings)
+- odkaz na jinou záložku je obyčejný odkaz na `/<jméno>`:
+
+```md
+[dokumentace](/documentation)
+```
 
 ## Sloupce
-Ukázka: celá tahle stránka. Každý sloupec začíná řádkem `#`.
+Řádek `#` začne nový sloupec, `---` nový řádek sloupců. Takhle je poskládaná i celá tahle stránka.
+{{example sloupce.md}}
+| zápis | výsledek |
+|---|---|
+| `#` | sloupec |
+| `#+` | sloupec 1,5× širší |
+| `#++` | sloupec 1,75× širší |
+| `#-` | úzký sloupec, poloviční šířka |
+| `#--` | velmi úzký sloupec, čtvrtinová šířka |
+| `#1.2` · `#0,8` | vlastní poměr šířky (desetinná tečka i čárka) |
+| `#120px` · `#12em` · `#30%` | pevná šířka, ostatní sloupce řádku si rozdělí zbytek; procenta počítají i s mezerami, takže `#25%` `#25%` `#50%` přesně vyplní řádek |
+| `---` | nový řádek sloupců (řádek těsně před `#`); samotný `#` v řádku je pás přes celou šířku |
+| ` ##. nadpis ` | nadpis sloupce bez rámečku, viz Karta bez rámečku |
+
+- text za `#` je jen pro orientaci v souboru, na stránce se nezobrazí
+- šířky jsou poměrové: čísla v řádku určují poměr, `#++` vedle `#-` je 3,5× širší; úzké sloupce se hodí na rychlé odkazy nebo stav služeb
+- sloupec potřebuje aspoň svoje číslo × `[layout] column_min_width`; co se nevejde, zalomí se na další řádek a roztáhne se
+- mezi řádky `---` je stejná mezera jako mezi sloupci (`[layout] row_gap`); řádek `/` mezi `---` a `#` přidá další
+- `---`, za kterým nenásleduje `#`, zůstane vodorovnou čarou v kartě
+- počet sloupců: šířka okna, nebo `[layout] columns_fixed`
+- `#` uvnitř bloku kódu se ignoruje
 
 ```md
 # Dev
@@ -31,207 +56,229 @@ Ukázka: celá tahle stránka. Každý sloupec začíná řádkem `#`.
 #- Úzký sloupec
 ## Rychlé odkazy
 …
-#__ Pás přes celou šířku
+---
+# Pás přes celou šířku
 ## Novinky
 …
 ```
-| zápis | výsledek |
-|---|---|
-| `#` | sloupec |
-| `#+` | sloupec 1,5× širší |
-| `#++` | sloupec 2× širší |
-| `#-` | úzký sloupec, poloviční šířka |
-| `#--` | velmi úzký sloupec, čtvrtinová šířka |
-| `#__` | pás přes celou šířku pod předchozími sloupci |
-| `` ## `nadpis` `` | nadpis sloupce bez rámečku (blok jen s titulkem, viz Nadpis sloupce) |
 
-- text za `#` je jen pro orientaci v souboru, na stránce se nezobrazí
-- šířky jsou poměrové: `#++` vedle `#-` je čtyřikrát širší; úzké sloupce se hodí na rychlé odkazy nebo stav služeb
-- sloupce, které se nevejdou, se zalomí na další řádek a roztáhnou se
-- počet sloupců: šířka okna, nebo `[layout] columns_fixed`
-- `#` uvnitř bloku kódu se ignoruje
+## Skryté poznámky
+Řádek začínající `//` se na stránce nevykreslí.
+{{example skryte}}
+Hodí se na připomínky v souboru. Uvnitř bloku kódu a uprostřed řádku `//` platí jako obyčejný text.
 
-## Bloky
-Ukázka: každý orámovaný rámeček na této stránce.
+```md
+// poznámka jen pro mě
+```
+
+#
+## Karty
+`## Titulek` vytvoří orámovanou kartu, jako je každý rámeček na této stránce.
+{{example karty.md}}
+Všechno až do dalšího `##` nebo `#` patří do karty.
+Obsah před prvním `##` ve sloupci tvoří kartu bez titulku, stejně jako samotné `##` bez textu.
+`## Titulek {.fill}` roztáhne kartu do výšky nejvyššího sloupce v řádku, takže sousední karty končí na stejné úrovni (karta Autor na stránce [nastavení](/settings)).
 
 ```md
 ## Repos
 - [GitHub](https://github.com)
 ```
-`## Titulek` vytvoří orámovaný blok. Všechno až do dalšího `##` nebo `#` patří do něj.
-Obsah před prvním `##` ve sloupci tvoří blok bez titulku.
-`## Titulek {.fill}` roztáhne blok do výšky nejvyššího sloupce v řádku, takže sousední bloky končí na stejné úrovni (blok Autor na stránce [h6082](/h6082)).
 
-## Nadpis sloupce
-Ukázka: žluté nadpisy `Struktura`, `Text`, `Bloky`… nad sloupci této stránky.
+## Karta bez rámečku
+`##.` místo `##` vykreslí kartu bez rámečku a pozadí, třeba žluté nadpisy řádků na této stránce.
+{{example bez-ramecku}}
+Hodí se k pojmenování sloupce, ale může mít i obsah, třeba text přímo na stránce. Samotné `##.` bez textu = obsah bez rámečku i nadpisu.
+`kód` v jakémkoli nadpisu nemá vlastní rámeček, zůstane jen jeho barva.
 
 ```md
 # Struktura
-## `Struktura`
+##. `Struktura`
 
 ## Záložky
 …
 ```
-Blok, který má jen titulek a nic pod ním, se vykreslí jako nadpis bez rámečku a pozadí. Hodí se k pojmenování sloupce.
-`kód` v jakémkoli nadpisu nemá vlastní rámeček, zůstane jen jeho barva.
 
-## Upravitelné bloky
-Ukázka: v záložce [demo-student](/demo-student) mají ✎ bloky Tento týden, Zkouškové, Bakalářská práce a Pojmový aparát.
+## Upravitelné karty
+`##*` místo `##` označí kartu, která jde upravit přímo na stránce, bez otevírání editoru.
+{{example upravitelna-karta}}
+Hodí se na průběžné drobnosti: seznamy, tabulky, krátké texty.
+
+- po najetí myší je vpravo nahoře ✎, klik otevře markdown karty na místě
+- ++ctrl+enter++ uloží, ++esc++ zruší; funguje chytré psaní i zkratky z editoru
+- uloží se jen tato karta, zbytek souboru zůstane beze změny
+- když se karta mezitím změní jinde, uložení se odmítne a nic se nepřepíše
+- titulek a nové karty se mění v editoru; platí jen pro tvoje záložky a s heslem editoru
 
 ```md
 ##* Nákupní seznam
 - mléko
 - chleba
 ```
-`##*` místo `##` označí blok, který jde upravit přímo na stránce, bez otevírání editoru. Hodí se na průběžné drobnosti: seznamy, tabulky, krátké texty.
 
-- po najetí myší je vpravo nahoře ✎, klik otevře markdown bloku na místě
-- ++ctrl+enter++ uloží, ++esc++ zruší; funguje chytré psaní i zkratky z editoru
-- uloží se jen tento blok, zbytek souboru zůstane beze změny
-- když se blok mezitím změní jinde, uložení se odmítne a nic se nepřepíše
-- titulek a nové bloky se mění v editoru; platí jen pro tvoje záložky a s heslem editoru
+#
+##+ Sbalitelné karty
+Klik na nadpis kartu sbalí a příště zůstane sbalená. Zkus to na téhle kartě.
+{{example sbalitelne}}
+`##-` místo `##` je karta sbalená od začátku, `##+` rozbalená, ale jde sbalit. Klik na nadpis (nebo ++enter++ na něm) ji přepne. Prohlížeč si stav pamatuje pro každou stránku a kartu, do souboru se nic nezapisuje. Jde kombinovat s `{.fill}` nebo `{.mobile}`.
+
+```md
+##- Archiv
+- staré odkazy
+
+##+ Tento týden
+- …
+```
 
 ## Podnadpisy
-### Jazyky
-- [Rust](https://doc.rust-lang.org/std/)
-- [Python](https://docs.python.org/3/)
-
-### Nástroje
-- [Docker](https://docs.docker.com)
+`###` člení obsah uvnitř karty.
+{{example podnadpisy}}
+Nadpis i obsah pod ním jsou lehce odsazené (`[layout] h3_indent`, `content_indent`).
 
 ```md
 ### Jazyky
 - [Rust](https://doc.rust-lang.org/std/)
 ```
-Člení obsah uvnitř bloku. Nadpis i obsah pod ním jsou lehce odsazené (`[layout] h3_indent`, `content_indent`).
 
 ## Menší nadpisy
-#### popisek 4. úrovně
-##### popisek 5. úrovně
-###### popisek 6. úrovně
+`####` až `######` jsou malé tlumené nadpisy na drobné popisky.
+{{example podnadpisy}}
+Jsou bez odsazení. Vzhled: `[style.h4]` až `[style.h6]`.
 
 ```md
 #### popisek 4. úrovně
 ##### popisek 5. úrovně
 ```
-Malé tlumené nadpisy bez odsazení, hodí se na drobné popisky. Vzhled: `[style.h4]` až `[style.h6]`.
 
 ## Řádky a odstavce
-První řádek
-druhý řádek
-/
-po prázdném řádku
-
-Nový odstavec.
-
-```md
-První řádek
-druhý řádek
-/
-po prázdném řádku
-
-Nový odstavec.
-```
+Každý řádek v souboru je řádek na stránce, prázdný řádek začne odstavec.
+{{example radky}}
 - ++enter++ = nový řádek, prázdný řádek = nový odstavec s mezerou
 - řádek jen s `/` vloží prázdný řádek, `//` dva, `///` tři…
-- `/` mimo blok (hned pod `#`, nebo nad `##`) udělá mezeru mezi bloky
+- `/` mimo kartu (hned pod `#`, nebo nad `##`) udělá mezeru mezi kartami, mezi `---` a `#` mezeru mezi řádky sloupců
 - klasické markdown chování (řádky se slévají) vrátí `[markdown] line_breaks = false`
 
-Před seznamem, tabulkou, citací nebo blokem kódu nemusí být prázdný řádek, doplní se sám.
-
-## Skryté poznámky
-Tenhle blok obsahuje poznámku, kterou nevidíš.
-// tohle se na stránce nezobrazí
+Před seznamem, tabulkou, citací, blokem kódu nebo nadpisem nemusí být prázdný řádek a za tabulkou taky ne, doplní se sám.
 
 ```md
-// poznámka jen pro mě
+První řádek
+druhý řádek
+/
+po prázdném řádku
+
+Nový odstavec.
 ```
-Řádek začínající `//` se nevykreslí. Hodí se na připomínky v souboru. Uvnitř bloku kódu a uprostřed řádku `//` platí jako obyčejný text.
 
-# Text
-## `Text`
+---
+#
+//
+##. `Text`
 
+---
+#
 ## Řez písma
-**tučně** · *kurzíva* · ***tučná kurzíva*** · ~~přeškrtnuto~~
+Tučné písmo, kurzíva a přeškrtnutí.
+{{example pismo}}
+Fungují i varianty s podtržítkem: `__tučně__` a `_kurzíva_`.
+V editoru: ++ctrl+b++, ++ctrl+i++, ++ctrl+shift+x++.
 
 ```md
 **tučně** · *kurzíva* · ***obojí*** · ~~přeškrtnuto~~
 ```
-Fungují i varianty s podtržítkem: `__tučně__` a `_kurzíva_`.
-V editoru: ++ctrl+b++, ++ctrl+i++, ++ctrl+shift+x++.
 
 ## Zvýraznění
-Text se ==zvýrazněným úsekem==.
+`==text==` podbarví úsek jako zvýrazňovač.
+{{example pismo}}
+Barva: `mark_bg` v motivu, vzhled: `[style.highlight]`. V editoru: ++ctrl+shift+h++.
 
 ```md
 Text se ==zvýrazněným úsekem==.
 ```
-Barva: `mark_bg` v motivu, vzhled: `[style.highlight]`. V editoru: ++ctrl+shift+h++.
 
 ## Inline kód
-Příkaz `docker ps` nebo `#!python print("hi")`
+Text mezi backticky je kód přímo v řádku.
+{{example inline-kod}}
+`#!jazyk` na začátku zapne zvýraznění syntaxe.
+Backtick uvnitř kódu: ``` `` a`b `` ```. V editoru: ++ctrl+e++.
 
 ```md
 `docker ps`
 `#!python print("hi")`
 ```
-`#!jazyk` na začátku zapne zvýraznění syntaxe.
-Backtick uvnitř kódu: ``` `` a`b `` ```. V editoru: ++ctrl+e++.
 
 ## Klávesy
-++ctrl+shift+t++ · ++alt+tab++ · ++cmd+space++ · ++f5++
+`++ctrl+b++` nakreslí klávesovou zkratku.
+{{example klavesy}}
+Klávesy se spojují znakem `+`. Známé názvy (`ctrl`, `alt`, `shift`, `cmd`, `win`, `tab`, `esc`, `up`, `f1`–`f24`, `page-up`, …) se převedou na popisky.
 
 ```md
 ++ctrl+shift+t++ · ++f5++
 ```
-Klávesy se spojují znakem `+`. Známé názvy (`ctrl`, `alt`, `shift`, `cmd`, `win`, `tab`, `esc`, `up`, `f1`–`f24`, `page-up`, …) se převedou na popisky.
 
 ## Nápověda
-Ikona s nápovědou [?](Zobrazí se po najetí myší nebo po klepnutí.) a s vlastní ikonou [★](?Místo ⓘ libovolný znak.)
+`[?](text)` je ikona s nápovědou, která se ukáže po najetí myší.
+{{example klavesy}}
+Na mobilu se ukáže po klepnutí. `\n` v textu zalomí řádek. Místo ⓘ může být libovolný znak (`[★](?…)`).
+Vzhled: `[style.tip]`. `[?](https://…)` zůstane obyčejným odkazem.
 
 ```md
 [?](text nápovědy)
 [★](?text nápovědy)
 ```
-Nápověda se ukáže po najetí myší, na mobilu po klepnutí. `\n` v textu zalomí řádek.
-Vzhled: `[style.tip]`. `[?](https://…)` zůstane obyčejným odkazem.
 
+#
 ## Zkratky
-Konfigurace v TOML, styl v CSS.
+`*[TOML]: …` vysvětlí zkratku po najetí myší.
+{{example pod-carou}}
+Definice může být kdekoli ve sloupci a platí pro celý sloupec.
 
 ```md
 Konfigurace v TOML.
 *[TOML]: Tom's Obvious Minimal Language
 ```
-Najeď myší na zkratku. Definice může být kdekoli ve sloupci a platí pro celý sloupec.
-
-*[TOML]: Tom's Obvious Minimal Language
-*[CSS]: Cascading Style Sheets
 
 ## Závorky
-Text (v závorce) a [hranatá] i {složená}.
+Závorky jde v configu obarvit, třeba vedlejší poznámky (v závorce).
+
+Každý typ (`round`, `square`, `curly`, `angle`) má vlastní sekci, např. `[style.bracket_round] color = "muted"`. Výchozí vzhled je beze změny.
 
 ```md
 Text (v závorce) a [hranatá] i {složená}.
 ```
-Každý typ závorek jde v configu obarvit, např. `[style.bracket_round] color = "muted"` pro vedlejší poznámky. Výchozí vzhled je beze změny.
 
+## Escapování
+Zpětné lomítko před znakem vypne jeho formátování.
+{{example escapovani}}
+Hodí se, když chceš napsat `*`, `#`, `[` nebo backtick tak, jak jsou.
+
+```md
+\*hvězdičky\*  \# křížek  \[závorky\]
+```
+
+## Inline HTML
+HTML v textu funguje: horní a dolní index, podtržení, vlastní styly.
+{{example html}}
+- `style="…"` na `<span>` nebo `<div>` = vlastní CSS (barva, pozadí, rámeček)
+- markdown uvnitř HTML bloku se zpracuje, jen když má blok atribut `markdown="1"`
+- `<details><summary>` je sbalitelný blok
+
+```html
+<small>malý</small> x<sup>2</sup> H<sub>2</sub>O <u>podtržení</u>
+<span style="background:#a882ff33;border-radius:6px;padding:1px 8px">štítek</span>
+```
+
+## Ozubené kolečko
+`{{gear}}` vloží do textu ikonu nastavení.
+{{example klavesy}}
+Je to stejné ozubené kolečko jako v liště, jen jako ikona (není to odkaz). Hodí se do návodů a uvítacích textů.
+
+```md
+pod {{gear}} vpravo nahoře
+```
+
+#
 ## Zarovnání a velikost
-Rozcestník na střed
-{: .center .big }
-
-podpis vpravo
-{: .right .muted }
-
-```md
-Rozcestník na střed
-{: .center .big }
-
-podpis vpravo
-{: .right .muted }
-```
-Řádek `{: … }` hned pod odstavcem mu přidá třídy:
-
+Řádek `{: … }` hned pod odstavcem ho zarovná nebo zvětší.
+{{example zarovnani}}
 | třída | výsledek |
 |:--|:--|
 | `.center` / `.right` | zarovnání na střed / doprava |
@@ -239,126 +286,142 @@ podpis vpravo
 | `.small` | menší písmo |
 | `.muted` | tlumená barva |
 
-Třídy jdou kombinovat a fungují i u nadpisů a seznamů. Vlastní styl: `{: style="…" }`, viz Atributy.
-
-## Inline HTML
-<small>malý text</small> · x<sup>2</sup> · H<sub>2</sub>O · <u>podtržení</u>
-
-```html
-<small>malý</small> x<sup>2</sup> H<sub>2</sub>O <u>podtržení</u>
-```
-Markdown uvnitř HTML bloku se zpracuje, jen když má blok atribut `markdown="1"`.
-
-## Escapování
-\*hvězdičky\*, \# křížek, \[závorky\], \`backtick\`
+Třídy jdou kombinovat a fungují i u nadpisů a seznamů. U nadpisu může být `{: … }` na konci řádku i na řádku pod ním. Vlastní styl: `{: style="…" }`, viz Atributy.
 
 ```md
-\*hvězdičky\*  \# křížek  \[závorky\]
+Rozcestník na střed
+{: .center .big }
+
+podpis vpravo
+{: .right .muted }
 ```
-Zpětné lomítko před znakem vypne jeho formátování.
+
+## Jen telefon nebo počítač
+`{.mobile}` a `{.desktop}` ukážou kartu nebo odstavec jen na telefonu, nebo jen na počítači.
+{{example zarizeni}}
+Hranice je 640 px, stejná jako skládání sloupců pod sebe. Za nadpisem `##` platí pro celou kartu, pod odstavcem jen pro něj.
+
+```md
+## Tip pro telefon {.mobile}
+…
+
+Odstavec jen pro počítač.
+{: .desktop }
+```
+
+## Atributy
+`{…}` za prvkem mu přidá barvu, třídu, kotvu nebo jiný atribut.
+{{example atributy}}
+Za prvek jde přidat `{#id}`, `{.třída}`, `{klíč=hodnota}` i `{: style="…" }`. U nadpisu jde atributy napsat na konec řádku i na samostatný řádek hned pod něj.
+
+```md
+Odstavec.
+{: style="color:#00bfa5" }
+**text**{: style="color:#ff9100" }
+[mapy](https://mapy.cz){target=_blank}
+```
 
 ## Poznámky pod čarou
-Tvrzení s poznámkou[^1] a další[^dlouha].
+`[^1]` v textu odkáže na poznámku, která se vypíše dole.
+{{example pod-carou}}
+Poznámky se zobrazí na konci poslední karty ve sloupci. Identifikátor může být i slovo (`[^zdroj]`).
 
 ```md
 Tvrzení s poznámkou[^1].
 [^1]: Text poznámky.
 ```
-Poznámky se zobrazí na konci posledního bloku ve sloupci.
 
-[^1]: Text poznámky.
-[^dlouha]: Identifikátor může být i slovo.
+---
+#
+//
+##. `Odkazy a obrázky`
 
-# Odkazy a seznamy
-## `Odkazy a seznamy`
-
+---
+#
 ## Odkazy
-[klasický odkaz](https://example.com) · [s tooltipem](https://example.com "titulek při najetí") · [jiná záložka](/docs) · [s referencí][ref]
-
-[ref]: https://example.com
+`[text](adresa)` je odkaz, volitelně s titulkem nebo s adresou bokem.
+{{example odkazy}}
+Externí odkazy se otevírají v nové záložce (`[page] links_new_tab`). V editoru: ++ctrl+k++, nebo vlož URL přes označený text.
 
 ```md
 [text](https://example.com)
 [text](https://example.com "tooltip")
-[text](/docs)
+[text](/documentation)
 [text][ref]
 [ref]: https://example.com
 ```
-Externí odkazy se otevírají v nové záložce (`[page] links_new_tab`). V editoru: ++ctrl+k++, nebo vlož URL přes označený text.
 
 ## Auto-odkazy
-<https://example.com> · https://example.com/path · <user@example.com>
+Holá adresa v textu je sama odkazem.
+{{example odkazy}}
+Zobrazí se bez `https://` a koncového lomítka. Odkaz na `http://` dostane varovnou značku, kromě adres v místní síti (`192.168.…`, `*.local`, `*.lan`, `localhost`).
 
 ```md
 <https://example.com>
 https://example.com/path
 <user@example.com>
 ```
-Holá adresa se zobrazí bez `https://` a koncového lomítka. Odkaz na `http://` dostane varovnou značku, kromě adres v místní síti (`192.168.…`, `*.local`, `*.lan`, `localhost`).
 
+#
 ## Chráněný e-mail
-Napiš mi: {{email jmeno example.com}}
+`{{email jméno doména}}` ukáže e-mail, který roboti v souboru nenajdou.
+{{example odkazy}}
+Jméno a doména se píšou odděleně, takže v md ani v HTML není adresa se zavináčem. Čitelnou adresu a odkaz `mailto:` složí až JavaScript v prohlížeči. Funguje kdekoli v textu.
 
 ```md
 {{email jmeno example.com}}
 ```
-Jméno a doména se píšou odděleně, takže v md ani v HTML není adresa se zavináčem. Čitelnou adresu a odkaz `mailto:` složí až JavaScript v prohlížeči. Funguje kdekoli v textu.
 
 ## Obrázky
-![h6082](/media/demo-hero.cs.svg)
-
-![logo](/static/img/logo.svg){width=20} ikona před textem · [![](/static/img/logo.svg){width=14} odkaz s ikonou](https://example.com)
-
-```md
-![h6082](/media/demo-hero.cs.svg)
-![logo](/media/ikona.svg){width=20}
-[![](/media/ikona.svg){width=14} text](https://…)
-```
+`![popis](/media/soubor.svg)` vloží obrázek, banner nebo malou ikonu.
+{{example obrazky.md}}
 - vlastní obrázky ulož do `content/media/` a vlož přes `/media/<soubor>` (`svg png jpg webp gif avif ico`)
-- obrázek sám v odstavci se roztáhne na šířku bloku
-- blok bez nadpisu, ve kterém je jen obrázek, se vykreslí bez rámečku jako banner (hlavička stránky h6082)
+- obrázek sám v odstavci se roztáhne na šířku karty
+- karta bez nadpisu, ve které je jen obrázek, se vykreslí bez rámečku jako banner (hlavička stránky nastavení)
 - menší velikost nastavíš atributem `{width=…}`
 - obrázky z webu (`https://…`) fungují taky, ale prohlížeč je stahuje z cizího serveru
 
 Skript uvnitř SVG se nespustí ani při přímém otevření obrázku.
 
-## Odrážky
-- položka
-- položka
-  - vnořená
-    - další úroveň
-
 ```md
-- položka
-  - vnořená
+![údolí](/media/foto-den.svg)
+![ikona](/media/ikona.svg){width=20}
+[![](/media/ikona.svg){width=14} text](https://…)
 ```
+
+---
+#
+//
+##. `Seznamy a úkoly`
+
+---
+#
+## Odrážky
+`-` na začátku řádku je položka seznamu.
+{{example odrazky}}
 Vnoření stačí odsadit o 2 mezery, v editoru ++tab++. Odrážky se kreslí jako `›` (`[style.list] marker`). Fungují i `*` a `+`.
 V editoru: ++ctrl+shift+8++.
 
-## Číslované seznamy
-1. první
-2. druhý
-   1. vnořený
-3. třetí
-
 ```md
-1. první
-2. druhý
-   1. vnořený
+- položka
+  - vnořená
 ```
+
+## Číslované seznamy
+`1.` na začátku řádku je číslovaná položka.
+{{example cislovane}}
 ++enter++ na konci položky přidá další číslo. Seznam může začít libovolným číslem. V editoru: ++ctrl+shift+7++.
 
-## Úkoly
-- [x] hotovo
-- [ ] rozpracováno
-  - [x] podúkol
-  - [ ] podúkol
-
 ```md
-- [x] hotovo
-- [ ] rozpracováno
-  - [ ] podúkol
+1. první
+2. druhý
+   1. vnořený
 ```
+
+#
+## Úkoly
+`- [ ]` je úkol se zaškrtávacím políčkem, `- [x]` hotový úkol.
+{{example ukoly}}
 V tvých záložkách jdou úkoly upravovat přímo na stránce:
 - klik na políčko úkol zaškrtne nebo odškrtne
 - ✕ (po najetí myší) smaže úkol i s podúkoly
@@ -366,41 +429,66 @@ V tvých záložkách jdou úkoly upravovat přímo na stránce:
 
 Změna se hned zapíše do md souboru. Tady v dokumentaci jsou úkoly jen pro čtení. V editoru: ++ctrl+shift+9++.
 
+```md
+- [x] hotovo
+- [ ] rozpracováno
+  - [ ] podúkol
+```
+
 ## Definiční seznam
-TTL
-: doba platnosti DNS záznamu
-
-MTU
-: max. velikost paketu
-: typicky 1500 B
+Pojem a pod ním `: vysvětlení`.
+{{example definice}}
+Pojem je na jednom řádku, vysvětlení na dalším za `: `. Vysvětlení může být víc.
 
 ```md
 TTL
 : doba platnosti DNS záznamu
 ```
-Pojem na jednom řádku, vysvětlení na dalším za `: `. Vysvětlení může být víc.
 
-# Bloky
-## `Bloky`
+#
+## Termíny úkolů
+`@datum` na konci úkolu ukáže štítek s termínem.
+{{example terminy}}
+| zápis | termín |
+|:--|:--|
+| `@2027-03-31` | pevné datum |
+| `@2026-11-20 14:00` | datum a čas |
+| `@+3` · `@-2` | za 3 dny · před 2 dny od dneška (šablony a ukázky, které nemají stárnout) |
+| `@+0 14:00` | dnes ve 14:00 |
 
+Do týdne je štítek relativní („za 2 dny“, „včera“), dál datum. Po termínu je červený, do 3 dnů oranžový, u hotového úkolu šedý. Počítá prohlížeč podle dnešního data; v souboru zůstává zápis, takže úkol jde dál odškrtnout i upravit.
+
+```md
+- [ ] podat daňové přiznání @2027-03-31
+- [ ] porada @2026-11-20 14:00
+- [ ] obnovit certifikát @+2
+```
+
+---
+#
+//
+##. `Obsah karet`
+
+---
+#
 ## Tabulky
-| služba | port | stav |
-|:--|--:|:-:|
-| home | 8088 | ✓ |
-| grafana | 3000 | ~~off~~ |
-
-```md
-| služba | port | stav |
-|:--|--:|:-:|
-| home | 8088 | ✓ |
-```
+Buňky odděluje `|`, pod hlavičkou je řádek `|---|`.
+{{example tabulka.md}}
 Zarovnání určuje oddělovací řádek: `:--` vlevo, `--:` vpravo, `:-:` na střed. V buňkách funguje inline formátování.
 
-## Bloky kódu
-```python hl_lines="2"
-def hello(name):
-    return f"ahoj {name}"
+```md
+| služba | port | stav |
+|:--|--:|:-:|
+| home | 8088 | ✓ |
 ```
+
+## Bloky kódu
+Kód mezi ```` ``` ```` je samostatný blok, obarvený podle jazyka.
+{{example blok-kodu}}
+- najeď myší na blok: vpravo nahoře je tlačítko pro zkopírování
+- jazyk: `bash`, `python`, `yaml`, `toml`, `json`, `rust`, `nix`, `diff`, …
+- `hl_lines="2 4-6"` zvýrazní řádky, `linenums="1"` je očísluje
+- barevné schéma a čísla řádků globálně: `[code]`
 
 ````md
 ```python hl_lines="2"
@@ -408,67 +496,53 @@ def hello(name):
     return f"ahoj {name}"
 ```
 ````
-- najeď myší na blok: vpravo nahoře je tlačítko pro zkopírování
-- jazyk: `bash`, `python`, `yaml`, `toml`, `json`, `rust`, `nix`, `diff`, …
-- `hl_lines="2 4-6"` zvýrazní řádky, `linenums="1"` je očísluje
-- barevné schéma a čísla řádků globálně: `[code]`
 
 ## Citace
-> Krátká citace nebo poznámka.
->> vnořená citace
+`>` na začátku řádku je citace, `>>` vnořená.
+{{example citace}}
+++enter++ v editoru pokračuje v citaci, na prázdném řádku ji ukončí.
 
 ```md
 > Krátká citace nebo poznámka.
 >> vnořená citace
 ```
-++enter++ v editoru pokračuje v citaci, na prázdném řádku ji ukončí.
 
+#
 ## Callouty
-> [!note]
-> Bez titulku se jako titulek použije typ.
-
-> [!tip] Tip
-> Obsah může obsahovat **markdown**, `kód` i [odkazy](https://example.com).
-
-> [!warning] Varování
-
-> [!danger] Nebezpečí
+Citace s typem `[!tip]` je barevný rámeček s titulkem.
+{{example callouty}}
+Typy: `note` · `tip` · `info` · `warning` · `danger`. Fungují i aliasy z Obsidianu a GitHubu (`important`, `caution`, `question`, `bug`, `success`, …). Bez titulku se jako titulek použije typ, callout bez obsahu je jen barevný řádek.
 
 ```md
 > [!tip] Titulek
 > obsah
 ```
-Typy: `note` · `tip` · `info` · `warning` · `danger`. Fungují i aliasy z Obsidianu a GitHubu (`important`, `caution`, `question`, `bug`, `success`, …). Callout bez obsahu je jen barevný řádek.
 
 ## Sbalitelné callouty
-> [!info]- Sbalený (klikni)
-> Skrytý obsah.
-
-> [!tip]+ Rozbalený
-> Lze ho sbalit.
+`-` nebo `+` za typem udělá z calloutu sbalitelný blok.
+{{example sbalitelne-callouty}}
+`-` = sbalený, `+` = rozbalený, ale sbalitelný.
 
 ```md
 > [!info]- Sbalený
 > obsah
 ```
-`-` za typem = sbalený, `+` = rozbalený, ale sbalitelný.
 
 ## Admonition
-!!! warning "Titulek"
-    Alternativní zápis calloutu.
+`!!!` je callout v syntaxi z MkDocs.
+{{example mkdocs}}
+Obsah je odsazený 4 mezerami. Výsledek je stejný jako u calloutu.
 
 ```md
 !!! warning "Titulek"
     obsah odsazený 4 mezerami
 ```
-Totéž co callout, jen v syntaxi z MkDocs.
 
+#
 ## Details
-??? note "Sbalený blok"
-    Obsah se zobrazí po kliknutí.
-
-???+ tip "Otevřený blok"
-    `???+` = výchozí stav rozbalený.
+`???` je sbalitelný blok v syntaxi z MkDocs.
+{{example mkdocs}}
+`???` = sbalený, `???+` = rozbalený. Obsah je odsazený 4 mezerami.
 
 ```md
 ??? note "Sbalený"
@@ -476,10 +550,12 @@ Totéž co callout, jen v syntaxi z MkDocs.
 ```
 
 ## Poznámka
-{{note}}
-Upravitelná poznámka. Pole roste dolů podle délky textu.
-Text se ukládá zpátky do md souboru.
-{{/note}}
+`{{note}}` … `{{/note}}` je pole, do kterého se píše přímo na stránce.
+{{example poznamka}}
+- text mezi značkami je obyčejný text, markdown se v něm nevykresluje
+- v tvých záložkách se ukládá sama ~0,8 s po poslední změně, pole roste podle délky textu
+- když se poznámka mezitím změní jinde, uložení se odmítne a nic se nepřepíše
+- zápis vyžaduje heslo editoru, tady v dokumentaci je jen pro čtení
 
 ````md
 {{note}}
@@ -487,182 +563,142 @@ mléko, chleba
 zavolat instalatérovi
 {{/note}}
 ````
-- text mezi `{{note}}` a `{{/note}}` je obyčejný text, markdown se v něm nevykresluje
-- v tvých záložkách se do ní píše přímo na stránce a ukládá se sama ~0,8 s po poslední změně
-- když se poznámka mezitím změní jinde, uložení se odmítne a nic se nepřepíše
-- zápis vyžaduje heslo editoru, tady v dokumentaci je jen pro čtení
 
 ## Oddělovač
-nad čarou
-
----
-
-pod čarou
-
-```md
-nad čarou
-
----
-
-pod čarou
-```
+`---` mezi prázdnými řádky nakreslí vodorovnou čáru.
+{{example oddelovac}}
 Před `---` musí být prázdný řádek, jinak se z předchozího řádku stane nadpis.
 
-## Atributy
-Odstavec s vlastní barvou.
-{: style="color:#00bfa5" }
-
-**tučně oranžově**{: style="color:#ff9100" }
-
 ```md
-Odstavec.
-{: style="color:#00bfa5" }
-**text**{: style="color:#ff9100" }
-```
-Za prvek jde přidat `{#id}`, `{.třída}`, `{klíč=hodnota}` i `{: style="…" }`.
+nad čarou
 
-#__
+---
+
+pod čarou
+```
+
+---
+#
 //
-## `Živé prvky`
+##. `Živé prvky`
 
-# Sledování
-
+---
+#
 ## Stav služeb
-- [GitHub](https://github.com){.check}
-- [Hacker News](https://news.ycombinator.com){.check}
-- [neexistující](https://nonexistent.invalid){.check}
-
-```md
-[GitHub](https://github.com){.check}
-[NAS](http://nas.lan){check="tcp://192.168.1.50:22"}
-```
-Barevná tečka ukazuje, jestli služba odpovídá: 🟢 v pořádku · 🟠 4xx (běží, ale chce přihlášení apod.) · 🔴 5xx, timeout nebo nedostupné.
+`{.check}` za odkazem ukáže barevnou tečkou, jestli služba odpovídá.
+{{example stav-sluzeb}}
+| tečka | stav |
+|:--|:--|
+| 🟢 | v pořádku |
+| 🟠 | 4xx: běží, ale chce přihlášení apod. |
+| 🔴 | 5xx, timeout nebo nedostupné |
 
 - `{.check}` kontroluje adresu odkazu přes HTTP(S)
 - `{check="…"}` je vlastní cíl: `https://…` nebo `tcp://host:port`
 - najetí myší ukáže kód, odezvu nebo chybu
 - obnovuje se každých `[checks] interval_s`
+- vymyšlený stav pro ukázky: [ukázková data](/documentation#ukazkova-data)
 
 Kontroly běží ze serveru v kontejneru. Služby na hostiteli: `host.docker.internal:<port>`. Server kontroluje jen cíle napsané v md souborech.
 
-## Server
-{{sys demo}}
-
 ```md
-{{sys}}
-{{sys cpu mem disk}}
-{{sys demo}}
+[GitHub](https://github.com){.check}
+[NAS](http://nas.lan){check="tcp://192.168.1.50:22"}
 ```
+
+#
+## Server
+`{{sys}}` ukáže vytížení procesoru, paměti a disků serveru.
+{{example server}}
 - části: `cpu` `mem` `swap` `load` `temp` `uptime` `disk`, bez parametrů se zobrazí všechny
 - hodnoty se obnovují každých `[system] interval_s` sekund
 - pruh je oranžový od 70 %, červený od 90 %
 
-> [!info] Demo režim
-> Ukázka výše má **vymyšlené hodnoty** (`demo`), generuje je prohlížeč a server se na nic neptá.
-> Skutečné hodnoty: v `config.toml` nastav `[system] enabled = true` a z bloku odeber `demo`. Výchozí stav je vypnuto, protože `/api/sys` vidí každý, kdo vidí stránku.
-
-# Feedy a historie
-
-## RSS
-{{rss https://news.ycombinator.com/rss 5}}
+> [!info] Zapnutí
+> V `config.toml` nastav `[system] enabled = true`. Výchozí stav je vypnuto, protože `/api/sys` vidí každý, kdo vidí stránku. Vymyšlené hodnoty pro ukázky: [ukázková data](/documentation#ukazkova-data).
 
 ```md
-{{rss https://news.ycombinator.com/rss 5}}
+{{sys}}
+{{sys cpu mem disk}}
 ```
+
+## RSS
+`{{rss URL}}` vypíše poslední články z feedu.
+{{example rss}}
 - celý řádek = jeden feed, číslo = počet položek (výchozí `[rss] default_limit`)
 - RSS 2.0, RSS 1.0 i Atom
 - 💬 = odkaz na komentáře, pokud je feed má
 - server drží feed v cache `[rss] refresh_min` minut a při výpadku zdroje ukáže poslední známý stav
-
-## Historie změn
-{{history 5 demo}}
+- vymyšlené titulky pro ukázky: [ukázková data](/documentation#ukazkova-data)
 
 ```md
-{{history}}
-{{history 20}}
-{{history demo-family.cs.md 5}}
+{{rss https://news.ycombinator.com/rss 5}}
 ```
+
+#
+## Historie změn
+`{{history}}` vypíše poslední úpravy souborů.
+{{example historie}}
 - poslední změny: čas, soubor, přidané a odebrané řádky
 - klik vede na diff s možností obnovit verzi (s heslem editoru)
 - verze vznikají samy při úpravách z editoru i odjinud, úpravy do 5 minut se slučují
 
-> [!info] Demo režim
-> Ukázka výše má **vymyšlené změny** (`demo`). Skutečná historie by ukázala názvy tvých souborů a časy úprav. Stačí z bloku odebrat `demo`.
-
-#+ Editor a ukázky
-
-## Našeptávání v editoru
-{{livedemo 8}}
-{{scene napoveda.md}}
-##* Termíny
-**1. 3.** pojištění
-> [!tip] Tip
-> Editor napoví i shortcody.
-{{rss https://news.ycombinator.com/rss 3}}
-{{/livedemo}}
+Historie ukáže názvy tvých souborů a časy úprav. Vymyšlené změny pro ukázky: [ukázková data](/documentation#ukazkova-data).
 
 ```md
-#        → sloupce a bloky: #+ #- #__ ## ##* …
-{{       → shortcody: {{rss URL 5}}, {{note}} …
-> [!     → callouty: tip, warning, danger … i sbalené
-{.       → třídy: .check .center .big .fill …
-](/      → názvy tvých stránek
-- [      → úkol
+{{history}}
+{{history 20}}
+{{history demo.cs.md 5}}
 ```
-- nabídka se ukáže jen po těchto začátcích, ne u každého slova
-- ++arrow-up++ ++arrow-down++ vybírá, ++enter++ nebo ++tab++ potvrdí, ++esc++ zavře; bez nabídky ++enter++ funguje jako obvykle
-- u shortcodu se po potvrzení označí parametr (`URL`), stačí ho přepsat
-- funguje v editoru i při úpravě bloku `##*` na stránce, ne na dotykových zařízeních; vypnutí: `[editor] suggest = false`
 
-## Živá ukázka
-{{livedemo 12}}
-#
-## Odkazy
-- [Mapy](https://mapy.cz)
-#
-## Dnes
-- [ ] nakoupit
-{{/livedemo}}
+## Odpočet
+`{{countdown datum}}` ukáže, kolik zbývá do data nebo kolik od něj uběhlo.
+{{example odpocet}}
+| zápis | ukáže |
+|:--|:--|
+| `{{countdown 2027-01-01}}` | „za 39 dní“, „zítra“, „dnes“, „před 3 dny“ |
+| `{{countdown 2027-01-20 9:00}}` | s časem i „za 5 h“ |
+| `{{countdown 2026-11-12 dny}}` | jen počet dní („3 dny“) |
+| `{{countdown +12}}` | 12 dní od dneška |
+
+Počítá prohlížeč podle svých hodin a obnovuje se každou minutu, najetí myší ukáže celé datum. Funguje kdekoli v textu.
 
 ```md
-{{livedemo 12}}
-#
-## Odkazy
-- [Mapy](https://mapy.cz)
-#
-## Dnes
-- [ ] nakoupit
-{{/livedemo}}
+Do Nového roku {{countdown 2027-01-01}}.
+Dovolená {{countdown +12}}.
 ```
-- okno editoru postupně „píše“ markdown mezi značkami a náhled pod ním se po každém řádku překreslí
-- číslo = délka jednoho průchodu v sekundách (výchozí 30), pak 4 s pauza a znovu od začátku
-- ❚❚ v liště okna animaci zastaví; mimo obrazovku stojí sama, při omezeném pohybu v systému se ukáže rovnou hotový stav
-- obsah je jen ukázka: úkoly nejdou odškrtnout a nepočítají se mezi úkoly stránky
 
-# Přehled shortcodů
+---
+#
+//
+##. `Shortcody`
 
+---
+#
 ## Shortcody
-Ukázka: bloky Server, Historie změn a RSS vlevo.
+Řádek obsahující **jen** shortcode se nahradí vygenerovaným obsahem, třeba karty Server, Historie změn a RSS výše.
+
+- `{{files}}`: seznam souborů s tlačítky *zobrazit* a *upravit*. `user` = jen tvoje, `system` = dokumentace, konfigurace a markdown.
+- `{{newfile}}`: formulář pro nový `.md` soubor
+- `{{theme}}`: dlaždice motivů, klik uloží `[theme] default`
+- `{{lang}}`: přepínač jazyka, uloží `[page] lang`
+- `{{email jméno doména}}`: chráněný e-mail
+- `{{countdown datum}}`: odpočet do data nebo od něj
+- `{{gear}}`: ozubené kolečko nastavení v textu
+
+`{{email}}`, `{{countdown}}` a `{{gear}}` fungují i uprostřed řádku. Uvnitř bloku kódu se shortcode nevykoná.
 
 ```md
 {{files}}
 {{newfile}}
 {{rss URL [počet]}}
-{{sys [části…] [demo]}}
-{{history [soubor] [počet] [demo]}}
+{{sys [části…]}}
+{{history [soubor] [počet]}}
 {{note}} … {{/note}}
-{{livedemo [sekundy]}} … {{/livedemo}}
 {{theme}}
 {{lang}}
 {{email jméno doména}}
+{{countdown datum [čas] [dny]}}
+{{gear}}
 ```
-Řádek obsahující **jen** shortcode se nahradí vygenerovaným obsahem.
-
-- `{{files}}`: seznam souborů s tlačítky *zobrazit* a *upravit*. `user` = jen tvoje, `system` = dokumentace, konfigurace a markdown.
-- `{{newfile}}`: formulář pro nový `.md` soubor
-- `{{livedemo [sekundy]}} … {{/livedemo}}`: animované okno editoru s živým náhledem, viz [Živá ukázka](#ziva-ukazka)
-- `{{theme}}`: dlaždice motivů, klik uloží `[theme] default`
-- `{{lang}}`: přepínač jazyka, uloží `[page] lang`
-- `{{email jméno doména}}`: chráněný e-mail, jako jediný funguje i uprostřed řádku
-
-Uvnitř bloku kódu se shortcode nevykoná.
+#-

@@ -4,7 +4,7 @@
 """h6082 — a compact start page generated from markdown.
 
 Each content/pages/*.md is one tab. In a file: `#` = (invisible) column,
-`##` = framed block in the column, `###` = subheading inside a block.
+`##` = framed card in the column, `###` = subheading inside a card.
 Files and config are reloaded on change; open pages refresh via SSE.
 The built-in editor (/edit/<file>) saves through /api/file.
 UI language: [page] lang (en | cs); built-in pages live in content/system/<lang>/.
@@ -33,7 +33,7 @@ import urllib.error
 import urllib.request
 import xml.etree.ElementTree as etree
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import date, datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlsplit
@@ -50,7 +50,7 @@ APP = Path(__file__).resolve().parent
 # history), no live reload; content comes only from the image (app/defaults/), no volume needed.
 READONLY = os.environ.get("H6082_READONLY", "").lower() in ("1", "true", "yes")
 # Demo mode for a public instance: read-only on the server, but visitors may edit pages, tasks,
-# notes and ##* blocks — their changes live only in their own browser (localStorage).
+# notes and ##* cards — their changes live only in their own browser (localStorage).
 DEMO = os.environ.get("H6082_DEMO", "").lower() in ("1", "true", "yes")
 READONLY = READONLY or DEMO
 CONTENT = APP / "defaults" if READONLY else Path(os.environ.get("CONTENT_DIR", APP / "content"))
@@ -58,6 +58,9 @@ CFG_FILE = CONTENT / "config.toml"
 PAGES = Path(os.environ.get("PAGES_DIR", CONTENT / "pages"))
 STATIC = APP / "static"
 PORT = int(os.environ.get("PORT", "8080"))
+# where the server listens: in the container all interfaces (docker publishes only 127.0.0.1); run
+# directly, H6082_BIND=127.0.0.1 keeps it off the local network
+BIND = os.environ.get("H6082_BIND", "0.0.0.0")
 # Editor password (HTTP Basic) from the environment — set it in .env, never in config or md.
 EDITOR_USER = os.environ.get("H6082_EDITOR_USER", "h6082")
 EDITOR_PASSWORD = os.environ.get("H6082_EDITOR_PASSWORD", "")
@@ -67,13 +70,16 @@ EXTRA_HOSTS = {h.strip().lower() for h in os.environ.get("H6082_ALLOWED_HOSTS", 
 # CSP nonce placeholder: random per start, so md content cannot know it.
 NONCE_PH = f"__nonce_{secrets.token_hex(8)}__"
 SSE_SLOTS = threading.BoundedSemaphore(32)  # max. concurrent /events connections
-RESERVED = {"static", "events", "healthz", "edit", "api", "history", "media"}
+RESERVED = {"static", "events", "healthz", "edit", "api", "history", "media",
+            "h6082", "nastaveni",   # old / Czech addresses of the settings page (they redirect to /settings)
+            "docs", "dokumentace"}  # old / Czech addresses of the documentation page (-> /documentation)
 MEDIA = CONTENT / "media"                    # own images, served at /media/<file> (falls back to defaults)
 MEDIA_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*\.(svg|png|jpe?g|webp|gif|avif|ico)$", re.I)
 SYSTEM = CONTENT / "system"                  # user overrides of built-in pages: system/<lang>/<name>.md
 DEFAULTS_DIR = APP / "defaults"              # shipped with the image: system pages, demo, media, config
 DEFAULT_SYSTEM = DEFAULTS_DIR / "system"
-SYSTEM_PAGES = {"h6082", "markdown", "docs"}  # + [page].about_tab; cannot be deleted
+SYSTEM_PAGES = {"settings", "markdown", "documentation", "examples"}  # + [page].about_tab; cannot be deleted
+OLD_PAGE_NAMES = {"h6082": "settings", "docs": "documentation"}   # renamed built-in pages: config, own copies and links still work
 TRASH = CONTENT / ".trash"                   # "deleted" files (can be restored)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -86,7 +92,7 @@ DEFAULTS = {
         "lang": "en",
         "links_new_tab": True,
         "header": "",
-        "about_tab": "h6082",
+        "about_tab": "settings",
         "live_reload": True,
     },
     "tabs": {
@@ -94,6 +100,7 @@ DEFAULTS = {
         "labels": {},
         "hidden": [],
         "show_single": False,
+        "examples": True,        # the examples page (/examples) as a tab on the left among the user tabs
     },
     "editor": {
         "enabled": True,
@@ -122,6 +129,7 @@ DEFAULTS = {
         "page_max_width": "1600px",
         "padding": "14px",
         "gap": "12px",
+        "row_gap": "",
         "block_gap": "10px",
         "block_padding": "6px 10px 8px",
         "radius": "6px",
@@ -161,7 +169,7 @@ DEFAULTS = {
     # Typography of the content. "" = the built-in look / the theme colour. Colours may name a
     # theme colour (text, muted, accent, h2, h3, link, code_fg, …) or be any CSS colour.
     "style": {
-        "text":       {"color": "", "size": "", "weight": "", "line_height": "", "space_before": "0", "space_after": "0.45em"},
+        "text":       {"color": "", "size": "", "weight": "", "line_height": "", "space_before": "0", "space_after": "0.8em"},
         "h2":         {"color": "", "size": "1em", "weight": "700", "style": "", "transform": "", "letter_spacing": ".02em",
                        "space_after": "1em", "border": ""},
         "h3":         {"color": "", "size": ".95em", "weight": "700", "style": "", "transform": "", "letter_spacing": "",
@@ -181,7 +189,7 @@ DEFAULTS = {
         "code_block": {"size": "", "line_height": "1.35", "padding": "5px 8px", "radius": "4px", "border": "",
                        "space_before": "0.6em", "space_after": "0.6em"},
         "quote":      {"color": "muted", "style": "", "border": "", "padding": "1px 8px", "space_before": "4px", "space_after": "4px"},
-        "list":       {"indent": "1.2em", "marker": "› ", "marker_color": "muted", "item_gap": "0",
+        "list":       {"indent": "1.6em", "marker": "› ", "marker_color": "muted", "item_gap": "0",
                        "space_before": "0.3em", "space_after": "0.45em"},
         "task":       {"checkbox_color": "", "done_color": "", "done_decoration": ""},
         "callout":    {"padding": "3px 8px", "radius": "3px", "border_width": "3px", "bg_opacity": "10",
@@ -347,20 +355,32 @@ STRINGS = {
         "ed_force": "overwrite",
         "ed_back": "back",
         "ed_rename": "rename",
+        "ed_hide": "In the tab bar · click to hide it (it stays reachable from settings)",
+        "ed_unhide": "Hidden from the tab bar, reachable from settings · click to show it",
         "ld_aria": "an editor writing markdown and a live preview of the page",
         "ld_pause": "pause / play",
+        "ld_seek": "jump to a moment of the scene",
+        "ld_skip": "next scene",
+        "ld_mini": "live demo",
+        "ld_max": "fill the window",
+        "ld_unmax": "back (Esc)",
+        "ld_no_scene": "example {s} not found on the examples page",
+        "ex_open": "examples ↗",
+        "ex_tab": "examples tab in the bar",
+        "ld_loop": "loop: play the scenes one after another (off = stop after each scene)",
+        "ed_nums": "line numbers (show / hide)",
         "ld_saved": "✓ saved to the file",
         "demo_off": "You can't try this in the demo",
-        "demo_bar": "Demo: you can edit pages, tasks, notes and ✎ blocks. Changes stay only in this browser.",
+        "demo_bar": "Demo: you can edit pages, tasks, notes and ✎ cards. Changes stay only in this browser.",
         "demo_reset": "reset the demo",
         "err_demo": "not available in the demo",
         "err_rate": "too many requests, try again in a minute",
         "js_demo_saved": "saved in this browser",
         "js_demo_changed": "changed pages: {n}",
         "js_demo_reset_confirm": "Discard all your changes and return the demo to its original state?",
-        "block_edit": "edit this block",
-        "err_block_changed": "the block was changed elsewhere — the page reloads, try again",
-        "err_block_heading": "a block cannot contain # / ## lines — add new blocks in the editor",
+        "block_edit": "edit this card",
+        "err_block_changed": "the card was changed elsewhere — the page reloads, try again",
+        "err_block_heading": "a card cannot contain # / ## lines — add new cards in the editor",
         "ed_delete": "delete",
         "ed_delete_title": "Deleting moves the file and its translations to content/.trash/.",
         "ed_reset": "reset to default",
@@ -370,6 +390,7 @@ STRINGS = {
         "f_docs_desc": "settings, operation, security",
         "f_config_desc": "config.toml: look, tabs, features",
         "f_markdown_desc": "every element with an example",
+        "f_examples_desc": "animated examples of markdown",
         "f_config": "configuration",
         "f_showcase": "showcase ↗",
         "ed_lang_base": "default",
@@ -432,10 +453,10 @@ STRINGS = {
         "err_file_changed": "the file was changed elsewhere",
         "err_write_failed": "write failed: {e}",
         "err_checks_off": "checks are disabled",
-        "err_bad_name": "invalid name (A-Z a-z 0-9 _ . -; reserved: static, events, healthz, edit, api, history, media, h6082, markdown, docs)",
+        "err_bad_name": "invalid name (A-Z a-z 0-9 _ . -; reserved: static, events, healthz, edit, api, history, media, settings, markdown, docs, livedemo, examples)",
         "err_exists": "{name}.md already exists",
         "err_host_421": "host {host!r} is not in [api] allowed_hosts",
-        "new_file": "# Column 1\n\n## Block\n- [link](https://example.com)\n\n# Column 2\n\n## Another block\ntext\n",
+        "new_file": "# Column 1\n\n## Card\n- [link](https://example.com)\n\n# Column 2\n\n## Another card\ntext\n",
         "js_locale": "en-GB",
         "js_copy": "copy",
         "js_block_save": "save",
@@ -504,20 +525,32 @@ STRINGS = {
         "ed_force": "přepsat",
         "ed_back": "zpět",
         "ed_rename": "přejmenovat",
+        "ed_hide": "V liště záložek · klik ji skryje (zůstane dostupná z nastavení)",
+        "ed_unhide": "Skrytá z lišty, dostupná z nastavení · klik ji zobrazí",
         "ld_aria": "editor, ve kterém vzniká markdown, a živý náhled stránky",
         "ld_pause": "pozastavit / spustit",
+        "ld_seek": "skočit na místo ve scéně",
+        "ld_skip": "další scéna",
+        "ld_mini": "živá ukázka",
+        "ld_max": "zvětšit na celé okno",
+        "ld_unmax": "zpět (Esc)",
+        "ld_no_scene": "ukázka {s} na stránce ukázek není",
+        "ex_open": "ukázky ↗",
+        "ex_tab": "záložka ukázek v liště",
+        "ld_loop": "smyčka: scény jdou samy za sebou (vypnuto = zastaví se po každé scéně)",
+        "ed_nums": "čísla řádků (zobrazit / skrýt)",
         "ld_saved": "✓ uloženo do souboru",
         "demo_off": "V demu to nejde vyzkoušet",
-        "demo_bar": "Demo: stránky, úkoly, poznámky i bloky ✎ můžeš upravovat. Změny zůstávají jen v tomto prohlížeči.",
+        "demo_bar": "Demo: stránky, úkoly, poznámky i karty ✎ můžeš upravovat. Změny zůstávají jen v tomto prohlížeči.",
         "demo_reset": "obnovit demo",
         "err_demo": "v demo módu není k dispozici",
         "err_rate": "příliš mnoho požadavků, zkus to za minutu",
         "js_demo_saved": "uloženo v tomto prohlížeči",
         "js_demo_changed": "změněné stránky: {n}",
         "js_demo_reset_confirm": "Zahodit všechny své změny a vrátit demo do původního stavu?",
-        "block_edit": "upravit blok",
-        "err_block_changed": "blok se mezitím změnil jinde — stránka se načte znovu, zkus to pak",
-        "err_block_heading": "blok nesmí obsahovat řádky # / ## — nové bloky přidej v editoru",
+        "block_edit": "upravit kartu",
+        "err_block_changed": "karta se mezitím změnila jinde — stránka se načte znovu, zkus to pak",
+        "err_block_heading": "karta nesmí obsahovat řádky # / ## — nové karty přidej v editoru",
         "ed_delete": "smazat",
         "ed_delete_title": "Smazání přesune soubor i s překlady do content/.trash/.",
         "ed_reset": "vrátit výchozí",
@@ -527,6 +560,7 @@ STRINGS = {
         "f_docs_desc": "nastavení, provoz, bezpečnost",
         "f_config_desc": "config.toml: vzhled, záložky, funkce",
         "f_markdown_desc": "všechny prvky s ukázkou",
+        "f_examples_desc": "animované ukázky markdownu",
         "f_config": "konfigurace",
         "f_showcase": "showcase ↗",
         "ed_lang_base": "výchozí",
@@ -589,10 +623,10 @@ STRINGS = {
         "err_file_changed": "soubor byl změněn jinde",
         "err_write_failed": "zápis selhal: {e}",
         "err_checks_off": "kontroly jsou vypnuté",
-        "err_bad_name": "neplatný název (A-Z a-z 0-9 _ . -; rezervované: static, events, healthz, edit, api, history, media, h6082, markdown, docs)",
+        "err_bad_name": "neplatný název (A-Z a-z 0-9 _ . -; rezervované: static, events, healthz, edit, api, history, media, settings, markdown, docs, livedemo, examples)",
         "err_exists": "{name}.md už existuje",
         "err_host_421": "host {host!r} není v [api] allowed_hosts",
-        "new_file": "# Sloupec 1\n\n## Blok\n- [odkaz](https://example.com)\n\n# Sloupec 2\n\n## Další blok\ntext\n",
+        "new_file": "# Sloupec 1\n\n## Karta\n- [odkaz](https://example.com)\n\n# Sloupec 2\n\n## Další karta\ntext\n",
         "js_locale": "cs-CZ",
         "js_copy": "kopírovat",
         "js_block_save": "uložit",
@@ -651,11 +685,18 @@ def js_strings(cfg):
 
 FENCE_RE = re.compile(r"^\s*(`{3,}|~{3,})")
 CALLOUT_RE = re.compile(r"^>\s*\[!(\w+)\]([+-]?)\s*(.*)$")
-COLUMN_RE = re.compile(r"^#(\+\+|\+|--|-|__)?(\s.*)?$")   # # column, #+ 1.5x, #++ 2x, #- 0.5x, #-- 0.25x, #__ full-width row
+# # column, #+ 1.5x, #++ 1.75x, #- 0.5x, #-- 0.25x, #1.2 / #0,8 any relative width, #60px / #12em / #30% a fixed width
+COLUMN_RE = re.compile(r"^#(\+\+|\+|--|-|\d+(?:[.,]\d+)?(?:px|em|rem|%)|\d+(?:[.,]\d+)?|[.,]\d+)?(\s.*)?$")
+FIXED_RE = re.compile(r"^(\d+(?:[.,]\d+)?)(px|em|rem|%)$")
+ROW_RE = re.compile(r"^-{3,}[ \t]*$")                   # --- right before a column (#…): a new row of columns
 COMMENT_RE = re.compile(r"^ {0,3}//")                   # // a note in the md, never shown
 SPACER_RE = re.compile(r"^ {0,3}(/+)[ \t]*$")            # a line of only "/": that many empty lines
-BLOCK_RE = re.compile(r"^##(\s|\*|$)")                  # ## or ##* (a block heading, not ###)
-EDIT_BLOCK_RE = re.compile(r"^##\*[ \t]*(.*)$")          # ##* Title: the block can be edited on the page
+BLOCK_RE = re.compile(r"^##(\s|\*|\.|-|\+|$)")          # ## / ##* / ##. / ##- / ##+ (a card heading, not ###)
+EDIT_BLOCK_RE = re.compile(r"^##\*[ \t]*(.*)$")          # ##* Title: the card can be edited on the page
+PLAIN_BLOCK_RE = re.compile(r"^##\.[ \t]*(.*)$")         # ##. Title: a card without frame and background
+PLAIN_MARK = "<!--h6082-plain-->"
+FOLD_BLOCK_RE = re.compile(r"^##([+-])[ \t]*(.*)$")       # ##- Title folded / ##+ Title open, a click folds it
+FOLD_MARK_RE = re.compile(r"\s*<!--h6082-fold:(open|closed)-->\s*")
 EDIT_MARK_RE = re.compile(r"\s*<!--h6082-edit:(\d+)-->")
 GAP_RE = re.compile(r"<!--h6082-gap:(\d+)-->")
 LIST_RE = re.compile(r"^\s{0,3}(?:[-*+]|\d+[.)])\s")
@@ -696,7 +737,8 @@ def page_path(cfg, name):
     lang = cur_lang(cfg)
     if name in SYSTEM_PAGES:
         cands = [SYSTEM / lang / f"{name}.md", DEFAULT_SYSTEM / lang / f"{name}.md",
-                 SYSTEM / "en" / f"{name}.md", DEFAULT_SYSTEM / "en" / f"{name}.md"]
+                 SYSTEM / "en" / f"{name}.md", DEFAULT_SYSTEM / "en" / f"{name}.md"] + \
+                [d / x / f"{name}.md" for x in LANGS for d in (SYSTEM, DEFAULT_SYSTEM)]   # not translated yet
     else:
         cands = [PAGES / f"{name}.{lang}.md", PAGES / f"{name}.md"] + \
                 [PAGES / f"{name}.{x}.md" for x in LANGS]
@@ -737,13 +779,14 @@ def seed_content():
         if not CFG_FILE.exists():
             write_atomic(CFG_FILE, (DEFAULTS_DIR / "config.toml").read_text(encoding="utf-8"))
             log.info("seeded config.toml")
-        # the built-in page "showcase" is now "markdown": move the user's own copies and history
+        # renamed built-in pages ("showcase" -> "markdown", "h6082" -> "settings", "docs" -> "documentation"): move the user's own copies and history
         for lang in LANGS:
             for base in (SYSTEM / lang, CONTENT / ".history" / "system" / lang):
-                old, new = base / "showcase.md", base / "markdown.md"
-                if old.exists() and not new.exists():
-                    os.replace(old, new)
-                    log.info("renamed %s -> %s", old.relative_to(CONTENT), new.relative_to(CONTENT))
+                for a, b in [("showcase", "markdown"), *OLD_PAGE_NAMES.items()]:
+                    old, new = base / f"{a}.md", base / f"{b}.md"
+                    if old.exists() and not new.exists():
+                        os.replace(old, new)
+                        log.info("renamed %s -> %s", old.relative_to(CONTENT), new.relative_to(CONTENT))
         marker = CONTENT / ".seeded"
         if not marker.exists():
             if not any(PAGES.glob("*.md")):
@@ -777,6 +820,16 @@ def deep_merge(base, over, path=""):
 _cfg = {"mtime": object(), "cfg": DEFAULTS}
 
 
+def renamed_pages(cfg):
+    """A config written for an old built-in page name (about_tab = "h6082") keeps working."""
+    page, tabs = cfg["page"], cfg["tabs"]
+    page["about_tab"] = OLD_PAGE_NAMES.get(page["about_tab"], page["about_tab"])
+    for key in ("order", "hidden"):
+        if isinstance(tabs.get(key), list):
+            tabs[key] = [OLD_PAGE_NAMES.get(x, x) for x in tabs[key]]
+    return cfg
+
+
 def readonly_overrides(cfg):
     """In read-only mode every feature that writes or reveals the server is switched off."""
     if not READONLY:
@@ -799,7 +852,7 @@ def load_config():
         return _cfg["cfg"]
     try:
         with CFG_FILE.open("rb") as f:
-            _cfg["cfg"] = readonly_overrides(deep_merge(DEFAULTS, tomllib.load(f)))
+            _cfg["cfg"] = readonly_overrides(renamed_pages(deep_merge(DEFAULTS, tomllib.load(f))))
         log.info("config loaded")
     except (tomllib.TOMLDecodeError, OSError) as e:
         log.warning("config.toml cannot be read (%s) — keeping the last valid one", e)
@@ -822,6 +875,7 @@ def css_vars(cfg):
         "page-max": L["page_max_width"],
         "pad": L["padding"],
         "gap": L["gap"],
+        "row-gap": L["row_gap"] or L["gap"],     # empty = the same space as between columns
         "block-gap": L["block_gap"],
         "block-pad": L["block_padding"],
         "radius": L["radius"],
@@ -856,10 +910,13 @@ STYLE_MAP = {
                                        "line_height": ("line-height", "main .highlight pre"),
                                        "padding": ("padding", "main .highlight pre")}),
     "quote": ("main blockquote", {"border": ("border-left", None)}),
-    "list": ("main :is(ul, ol)", {"indent": ("padding-left", None),
+    # indent: a variable, so a numbered list can still widen it for "10." (see ol in style.css)
+    "list": ("main :is(ul, ol)", {"indent": ("--list-indent", "main"),
                                   "space_before": ("margin-top", "main :not(li) > :is(ul, ol)"),     # not nested lists
                                   "space_after": ("margin-bottom", "main :not(li) > :is(ul, ol)"),
-                                  "marker": ("content", "main ul > li:not(.task-list-item)::marker"),
+                                  # not the items with their own mark: tasks, "+ new task", a status dot, the history page list
+                                  "marker": ("content", "main ul:not(.grid.hist ul) > li:not(.task-list-item, .task-add, "
+                                                        ":has(> a[data-check]:first-child))::marker"),
                                   "marker_color": ("color", "main li::marker"),
                                   "item_gap": ("margin-bottom", "main li")}),
     "task": ("main li.task-list-item", {"checkbox_color": ("accent-color", "main li.task-list-item > input"),
@@ -1044,6 +1101,17 @@ THEME_JS = """<script nonce="__NONCE__">
     alert(T.lang_not_saved + (j.error || r.status));
     document.querySelectorAll('select[data-lang-pick]').forEach((s) => { s.value = document.documentElement.lang; });
   }
+  // {{examples}}: the examples tab on the left of the bar, saved to config.toml ([tabs] examples), then reload
+  document.addEventListener('change', async (e) => {
+    const c = e.target.closest('input[data-examples-tab]');
+    if (!c) return;
+    const r = await fetch('/api/examples-tab', {method: 'POST', headers: {'X-H6082': '1', 'Content-Type': 'application/json'},
+      body: JSON.stringify({on: c.checked})});
+    if (r.ok) { location.reload(); return; }
+    const j = await r.json().catch(() => ({}));
+    c.checked = !c.checked;
+    alert(j.error || r.status);
+  });
   sync();
   window.h6082Theme = {sync};
 })();
@@ -1074,7 +1142,9 @@ def default_tab(cfg, tabs):
     return stems[0] if stems else None
 
 
-SYSTEM_LABELS = {"docs": {"en": "documentation", "cs": "dokumentace"}}   # unless [tabs] labels says otherwise
+SYSTEM_LABELS = {"documentation": {"en": "documentation", "cs": "dokumentace"},   # unless [tabs] labels says otherwise
+                 "settings": {"en": "settings", "cs": "nastavení"},
+                 "examples": {"en": "examples", "cs": "ukázky"}}
 
 
 def tab_label(cfg, name):
@@ -1103,25 +1173,82 @@ def iter_lines_with_fence(text):
         yield line, fence is None
 
 
+def is_row_break(lines, i):
+    """`---` at lines[i] ([(line, is_outside_code)]) starts a new row of columns when the next
+    meaningful line (skipping empty lines and `//` notes) is a column `#…`; otherwise it stays a
+    horizontal rule (<hr>) inside its card."""
+    line, outside = lines[i]
+    if not (outside and ROW_RE.match(line)):
+        return False
+    for nxt, out in lines[i + 1:]:
+        if not out:
+            return False
+        if nxt.strip() and not COMMENT_RE.match(nxt) and not SPACER_RE.match(nxt):
+            return bool(COLUMN_RE.match(nxt))
+    return False
+
+
+COL_WEIGHT = {"": 1, "+": 1.5, "++": 1.75, "-": .5, "--": .25}
+
+
+def col_weight(kind):
+    """Relative width of a column from its `#` marker: + ++ - -- or a number (#1.2, #0,8);
+    None for a fixed width (#60px)."""
+    if FIXED_RE.match(kind):
+        return None
+    if kind in COL_WEIGHT:
+        return COL_WEIGHT[kind]
+    try:
+        return min(max(float(kind.replace(",", ".")), .05), 20)
+    except ValueError:
+        return 1
+
+
+HEADING_RE = re.compile(r"^#{2,6}(\*|\.|-|\+)?(\s|$)")       # ## ##* ##. ##- ##+ ### … ######
+_ATTR = r"""(?:[.#][\w-]+|[\w-]+=(?:"[^"]*"|'[^']*'|[^\s}]+))"""
+ATTR_LINE_RE = re.compile(r"^\{:?[ \t]*" + _ATTR + r"(?:[ \t]+" + _ATTR + r")*[ \t]*\}[ \t]*$")   # {: .x #id k=v }
+
+
+def merge_heading_attrs(text):
+    """A line of attributes right under a heading belongs to the heading, like at the end of its line:
+    `## Title` + `{: .center }` -> `## Title {: .center }` (Markdown would make it a paragraph)."""
+    lines, out = list(iter_lines_with_fence(text)), []
+    i = 0
+    while i < len(lines):
+        line, outside = lines[i]
+        if (outside and HEADING_RE.match(line) and i + 1 < len(lines) and lines[i + 1][1]
+                and ATTR_LINE_RE.match(lines[i + 1][0].strip())):
+            out.append(line.rstrip() + " " + lines[i + 1][0].strip())
+            i += 2
+            continue
+        out.append(line)
+        i += 1
+    return "\n".join(out)
+
+
 def split_columns(text, line_breaks=True):
-    """Splits text on `#` lines (outside code blocks) into [(kind, text)]: kind "" / "+" / "++"
-    is a column of normal / 1.5x / 2x width, "-" / "--" of 0.5x / 0.25x, "__" a full-width row. Text before the first `#` =
-    first column. Lines starting with `//` are notes in the source and are dropped; a line of
-    only slashes (`/`, `//`, …) is that many empty lines."""
+    """Splits text on `#` lines (outside code blocks) into [(kind, text)]: kind is the column
+    marker ("" / "+" / "++" / "-" / "--" / a number, see col_weight) or "---" = a new row of
+    columns. Text before the first `#` = first column. Lines starting with `//` are notes in the
+    source and are dropped; a line of only slashes (`/`, `//`, …) is that many empty lines."""
     cols = [("", [])]
-    lines = list(iter_lines_with_fence(text))
+    lines = list(iter_lines_with_fence(merge_heading_attrs(text)))
     in_block = False
     n_edit = 0
 
     def next_is_block(i):
-        for line, outside in lines[i + 1:]:
+        for j, (line, outside) in enumerate(lines[i + 1:], i + 1):
             if not outside:
                 return False
             if line.strip() and not SPACER_RE.match(line):
-                return bool(BLOCK_RE.match(line) or COLUMN_RE.match(line))
+                return bool(BLOCK_RE.match(line) or COLUMN_RE.match(line) or is_row_break(lines, j))
         return True
 
     for i, (line, outside) in enumerate(lines):
+        if is_row_break(lines, i):
+            cols.append(("---", []))
+            in_block = False
+            continue
         if outside and (m := COLUMN_RE.match(line)):
             cols.append((m.group(1) or "", []))
             in_block = False
@@ -1129,11 +1256,18 @@ def split_columns(text, line_breaks=True):
         if outside and BLOCK_RE.match(line):
             in_block = True
             if em := EDIT_BLOCK_RE.match(line):
-                cols[-1][1].append(f"## {em.group(1)} <!--h6082-edit:{n_edit}-->")
+                cols[-1][1].append(f"## <!--h6082-edit:{n_edit}--> {em.group(1)}".rstrip())
                 n_edit += 1
                 continue
+            if pm := PLAIN_BLOCK_RE.match(line):     # the mark first, so `{.fill}` at the end still works
+                cols[-1][1].append(f"## {PLAIN_MARK} {pm.group(1)}".rstrip())
+                continue
+            if fm := FOLD_BLOCK_RE.match(line):
+                state = "closed" if fm.group(1) == "-" else "open"
+                cols[-1][1].append(f"## <!--h6082-fold:{state}--> {fm.group(2)}".rstrip())
+                continue
         if outside and (sp := SPACER_RE.match(line)) and (not in_block or next_is_block(i)):
-            # outside a block: an empty gap in the column instead of a framed block
+            # outside a card: an empty gap in the column instead of a framed card
             cols[-1][1].extend(["", f"<!--h6082-gap:{min(len(sp.group(1)), 20)}-->", ""])
             continue
         if outside and (sp := SPACER_RE.match(line)):
@@ -1144,25 +1278,49 @@ def split_columns(text, line_breaks=True):
         if outside and COMMENT_RE.match(line):
             continue
         cols[-1][1].append(line)
-    out = [(k, "\n".join(c)) for k, c in cols]
+    out = [(k, "".join(x for x in c if GAP_RE.search(x)) if k == "---" else "\n".join(c)) for k, c in cols]
     return [(k, t) for i, (k, t) in enumerate(out) if i > 0 or t.strip()]
 
 
-COL_CLASS = {"": "col", "+": "col w15", "++": "col w2", "-": "col w05", "--": "col w025"}
-
-
 def layout_html(md, parts):
-    """Columns side by side (.cols, wrapping), a `#__` part as a full-width row between them."""
+    """Columns side by side (.cols, wrapping); a `---` part starts a new row (.cols) below,
+    separated by [layout] row_gap. A column's relative width is the --g custom property."""
     out, row = [], []
+    rows, cur = [], []                     # the `#` markers of each explicit row (between `---`)
+    for kind, _ in parts:
+        if kind == "---":
+            rows.append(cur)
+            cur = []
+        else:
+            cur.append(kind)
+    rows.append(cur)
+    # the share of the free width: the weights of a row scaled so the smallest is at least 1 (a row of
+    # #0.11 #0.35 then still fills its width, in the ratio 0.11 : 0.35)
+    scale = [1 / min([w for k in r if (w := col_weight(k)) is not None] + [1]) for r in rows]
+    ri = 0
     for kind, text in parts:
-        inner = blocks(render_md(md, text))
-        if kind == "__":
+        if kind == "---":
             if row:
                 out.append(f'<div class="cols">{"".join(row)}</div>')
                 row = []
-            out.append(f'<div class="wide">{inner}</div>')
-        else:
-            row.append(f'<div class="{COL_CLASS[kind]}">{inner}</div>')
+            ri += 1
+            n = sum(int(x) for x in GAP_RE.findall(text))   # `/` lines between `---` and `#`: extra space
+            if n:
+                out.append(f'<div class="row-gap" style="height:max(0px, calc({n} * var(--line-height) * 1em - var(--row-gap)))"></div>')
+            continue
+        inner = blocks(render_md(md, text))
+        g = col_weight(kind)
+        if g is None:                      # #60px: a fixed width
+            n, unit = FIXED_RE.match(kind).groups()
+            v = float(n.replace(",", "."))
+            # #25%: the column takes its share of the gaps too, so 25% + 25% + 50% fill one row exactly
+            # (P% - gap × (1 - P/100) summed over a row of 100% = the width minus all its gaps)
+            fw = f"calc({v:g}% - var(--gap) * {1 - v / 100:g})" if unit == "%" else f"{v:g}{unit}"
+            row.append(f'<div class="col fixed" style="--fw:{fw}">{inner}</div>')
+            continue
+        w = g * scale[ri]
+        style = "" if g == 1 and w == 1 else f' style="--g:{g:g}' + ("" if w == g else f";--w:{w:g}") + '"'
+        row.append(f'<div class="col"{style}>{inner}</div>')
     if row:
         out.append(f'<div class="cols">{"".join(row)}</div>')
     return "".join(out)
@@ -1195,8 +1353,8 @@ def files_markdown(cfg, which="all"):
             edit = [btn(f"/edit/{quote(file_id(src))}", t(cfg, "f_edit"))] if ed and src else []
             rows.append(row(name, [btn(f"/{quote(name)}", t(cfg, "f_view"))] + edit))
     if which in ("all", "system"):
-        sysrows.append(row("markdown", [btn("/markdown", t(cfg, "f_showcase"))], t(cfg, "f_markdown_desc")))
-        sysrows.append(row(t(cfg, "f_docs"), [btn("/docs", t(cfg, "f_view"))], t(cfg, "f_docs_desc")))
+        sysrows.append(row("markdown", [btn("/markdown", t(cfg, "f_view"))], t(cfg, "f_markdown_desc")))
+        sysrows.append(row(t(cfg, "f_docs"), [btn("/documentation", t(cfg, "f_view"))], t(cfg, "f_docs_desc")))
         sysrows.append(row(t(cfg, "f_config"), [btn("/edit/config.toml", t(cfg, "f_edit"), demo_off(cfg))] if ed else [],
                            t(cfg, "f_config_desc")))
     if not rows and not sysrows:
@@ -1219,6 +1377,16 @@ def newfile_html(cfg):
             f'<button type="submit"{title}>{t(cfg, "newfile_button")}</button></form>')
 
 
+def examples_bar(cfg):
+    """Shortcode {{examples}} (header of the markdown page): a button to /examples and a switch that
+    shows / hides the examples tab on the left of the bar ([tabs] examples in config.toml)."""
+    on = " checked" if cfg["tabs"].get("examples") else ""
+    off = demo_off(cfg) if DEMO else (" disabled" if READONLY or not cfg["editor"]["enabled"] else "")
+    return (f'<div class="examples-bar"><a class="tab" href="/examples">{t(cfg, "ex_open")}</a>'
+            f'<label class="examples-switch"{off}><input type="checkbox" data-examples-tab{on}'
+            f'{" disabled" if off else ""}> {t(cfg, "ex_tab")}</label></div>')
+
+
 def lang_buttons(cfg):
     """Shortcode {{lang}}: language buttons; a click saves [page] lang to config.toml."""
     cur = cur_lang(cfg)
@@ -1231,6 +1399,9 @@ SHORTCODE_RE = re.compile(r"^\{\{\s*(\w+)((?:\s+\S+)*)\s*\}\}$")
 
 
 def rss_box(cfg, args):
+    """{{rss URL [count] [demo]}} — `demo` = made-up headlines rendered here, the feed is never fetched."""
+    if "demo" in args:
+        return _ld_feed(cfg, [a for a in args if a != "demo"])
     if not cfg["rss"]["enabled"]:
         return f"<small>{t(cfg, 'rss_disabled')}</small>"
     if not args or not valid_http(args[0]):
@@ -1279,12 +1450,61 @@ def tip_html(m):
     return f'<span class="tip" tabindex="0" role="note" aria-label="{tip}" data-tip="{tip}">{html.escape(icon)}</span>'
 
 
+GEAR_INLINE_RE = re.compile(r"\{\{\s*gear\s*\}\}")
+# {{countdown 2026-12-24 [14:00] [days]}}: time to / since a date, counted in the browser
+COUNTDOWN_RE = re.compile(r"\{\{\s*countdown\s+(\d{4}-\d{2}-\d{2}|[+-]\d{1,4})(?:\s+(\d{1,2}:\d{2}))?(\s+(?:dny|days))?\s*\}\}")
+# - [ ] task @2026-11-20 [14:00]: a due date at the end of a task line
+DUE_RE = re.compile(r"\s@(\d{4}-\d{2}-\d{2}|[+-]\d{1,4})(?:[ T](\d{1,2}:\d{2}))?\s*$")   # @+3 = in 3 days
+
+
+def _date_attrs(d, tm):
+    """Attributes of a <time>: datetime="2026-11-20[T14:00]", or for a relative +3 / -2 (days from today,
+    counted in the browser, so examples never get old) data-rel="3" [data-time="14:00"]; None = invalid."""
+    t = f"{int(tm.split(':')[0]):02d}:{tm.split(':')[1]}" if tm else ""
+    if d[0] in "+-":
+        return f' data-rel="{int(d)}"' + (f' data-time="{t}"' if t else ""), (d + (" " + t if t else ""))
+    try:
+        date.fromisoformat(d)
+    except ValueError:
+        return None
+    iso = d + (f"T{t}" if t else "")
+    return f' datetime="{iso}"', iso.replace("T", " ")
+
+
+def countdown_html(m):
+    a = _date_attrs(m.group(1), m.group(2))
+    if not a:
+        return m.group(0)
+    days = ' data-mode="days"' if m.group(3) else ""
+    return f'<time class="countdown"{a[0]}{days}>{html.escape(a[1])}</time>'
+
+
+def due_html(m):
+    a = _date_attrs(m.group(1), m.group(2))
+    if not a:
+        return m.group(0)
+    return f' <time class="due"{a[0]}>{html.escape(a[1])}</time>'
+
+
+def gear_html(cfg):
+    """{{gear}}: the gear of the tab bar inside text (just the icon, not a link)."""
+    svg = GEAR_SVG.replace('width="17" height="17"', 'width="1.15em" height="1.15em"')
+    return f'<span class="gear-inline" aria-hidden="true">{svg}</span>'
+
+
 def _inline(part, cfg):
+    if "gear" in part:
+        part = GEAR_INLINE_RE.sub(lambda _: gear_html(cfg), part)
+    if "countdown" in part:
+        part = COUNTDOWN_RE.sub(countdown_html, part)
     return TIP_RE.sub(tip_html, EMAIL_RE.sub(lambda e: email_html(e, cfg), part))
 
 
 def inline_shortcodes(line, cfg):
-    """Inline shortcodes ({{email …}}, [?](hint)) outside `inline code`."""
+    """Inline shortcodes ({{email …}}, [?](hint), {{gear}}, {{countdown …}}) outside `inline code`;
+    a task line ending with @2026-11-20 gets its due date marked."""
+    if TASK_LINE_RE.match(line) and (dm := DUE_RE.search(line)) and "`" not in line[dm.start():]:
+        line = line[:dm.start()] + due_html(dm)
     out, pos = [], 0
     for m in INLINE_CODE_RE.finditer(line):
         out.append(_inline(line[pos:m.start()], cfg))
@@ -1329,6 +1549,8 @@ def expand_shortcodes(cfg, text):
                     else f"<small>{t(cfg, 'editor_disabled_small')}</small>", ""]
         elif name == "lang":
             out += ["", lang_buttons(cfg), ""]
+        elif name == "examples":
+            out += ["", examples_bar(cfg), ""]
         else:
             out.append(inline_shortcodes(line, cfg) if outside else line)
     return "\n".join(out)
@@ -1429,6 +1651,8 @@ def nest_lists(text):
 def _line_kind(line):
     if not line.strip():
         return "blank"
+    if re.match(r"^#{1,6}(\s|$)", line):
+        return "heading"
     for k, rx in (("list", LIST_RE), ("table", TABLE_RE), ("quote", QUOTE_RE), ("admon", ADMON_RE)):
         if rx.match(line):
             return k
@@ -1436,8 +1660,9 @@ def _line_kind(line):
 
 
 def separate_blocks(text):
-    """Inserts a blank line before a list/table/quote/code block that directly follows text
-    (like GitHub/Obsidian; Python-Markdown would not recognise them otherwise)."""
+    """Inserts a blank line before a list/table/quote/code block or a heading that directly follows text,
+    and after a table (like GitHub/Obsidian; Python-Markdown would not recognise them otherwise, a line
+    right under a table even becomes one of its rows)."""
     out, prev, fence = [], "blank", None
     for line in text.split("\n"):
         m = FENCE_RE.match(line)
@@ -1456,6 +1681,8 @@ def separate_blocks(text):
         if k in ("list", "table", "quote", "admon") and prev not in ("blank", k) \
                 and not (k == "list" and prev == "indent"):
             out.append("")
+        elif k != "blank" and prev != "blank" and (k == "heading" or (prev == "table" and k != "table")):
+            out.append("")              # a heading, or anything after a table (it would become a table row)
         out.append(line)
         prev = k
     return "\n".join(out)
@@ -1497,6 +1724,21 @@ class _LinkTidy(Treeprocessor):
                 a.set("title", a.get("title") or self.title)
 
 
+class _OlWidth(Treeprocessor):
+    """<ol>: --ol-digits = digits of its highest number, so the CSS indent fits "10." / "100." and the
+    numbers stay inside the card (markers sit to the left of the list's padding)."""
+    def run(self, root):
+        for ol in root.iter("ol"):
+            try:
+                start = int(ol.get("start", "1"))
+            except ValueError:
+                start = 1
+            top = max(abs(start), abs(start + sum(1 for li in ol if li.tag == "li") - 1))
+            d = len(str(top))
+            if d > 1:
+                ol.set("style", (ol.get("style", "").rstrip("; ") + f"; --ol-digits:{d}").lstrip("; "))
+
+
 class _LinkTidyExt(Extension):
     def __init__(self, title):
         super().__init__()
@@ -1504,6 +1746,7 @@ class _LinkTidyExt(Extension):
 
     def extendMarkdown(self, md):
         md.treeprocessors.register(_LinkTidy(md, self.title), "h6082_links", 1)
+        md.treeprocessors.register(_OlWidth(md), "h6082_ol_width", 0.9)
 
 
 BRACKETS = {"round": "()", "square": "[]", "curly": "{}", "angle": "«»"}
@@ -1595,7 +1838,9 @@ def make_md(cfg):
             "footnotes": {"UNIQUE_IDS": True},
             "pymdownx.highlight": {
                 "use_pygments": True,
-                "linenums": bool(cfg["code"]["line_numbers"]),
+                # True = numbers on every block; None = off, but a block can turn them on (linenums="1");
+                # False would forbid them even there
+                "linenums": True if cfg["code"]["line_numbers"] else None,
                 "guess_lang": False,
             },
             "pymdownx.tilde": {"subscript": False},
@@ -1630,7 +1875,7 @@ def _subsections(htm):
 
 
 def blocks(htm):
-    """Each `##` (and content before the first `##`) -> a separate framed block;
+    """Each `##` (and content before the first `##`) -> a separate framed card;
     a column-level `/` line -> an empty gap of that many lines."""
     parts = GAP_RE.split(htm)
     if len(parts) > 1:
@@ -1644,28 +1889,41 @@ def blocks(htm):
         edit = EDIT_MARK_RE.search(head or "")
         if edit:
             head = EDIT_MARK_RE.sub("", head)
+        fold = FOLD_MARK_RE.search(head or "")
+        if fold:
+            head = FOLD_MARK_RE.sub("", head, count=1)
+        plain = PLAIN_MARK in (head or "")
+        if plain:
+            head = re.sub(r"\s*" + re.escape(PLAIN_MARK) + r"\s*", "", head)
         title = re.sub(r"<[^>]+>", "", head or "").strip()
         sid = f' id="{"cfg-" if title.startswith("[") else ""}{slug(title)}"' if head else ""
-        cls = "block" if body_html or not head else "block title-only"   # `## Title` alone = a column heading
+        cls = "block plain" if plain else "block"          # ##. = no frame (e.g. a column heading)
+        if fold and title:                                  # ##- / ##+: a click on the title folds the card
+            cls += " fold" + (" folded" if fold.group(1) == "closed" else "")
         if not head and IMAGE_ONLY_RE.match(inner):                        # just an image: a banner, no frame
             cls = "block image-only"
-        if head and (fm := H2_CLASS_RE.search(head)) and "fill" in fm.group(1).split():   # ## Title {.fill}
-            rest = " ".join(c for c in fm.group(1).split() if c != "fill")
-            head = head[:fm.start()] + (f' class="{rest}"' if rest else "") + head[fm.end():]
-            cls += " fill"
-        if edit:   # finished in build_tab: source + ✎ button, or a plain block when not editable
-            out.append(f'<section class="block" data-edit-block="{edit.group(1)}"{sid}>{head or ""}{body_html}</section>')
+        if head and (fm := H2_CLASS_RE.search(head)):   # ## Title {.fill} / {.mobile} / {.desktop}: for the card
+            own = [c for c in fm.group(1).split() if c in BLOCK_CLASSES]
+            if own:
+                rest = " ".join(c for c in fm.group(1).split() if c not in BLOCK_CLASSES)
+                head = head[:fm.start()] + (f' class="{rest}"' if rest else "") + head[fm.end():]
+                cls += " " + " ".join(own)
+        if head and not title and "<img" not in head:   # `##` with an empty title: no heading, no lone line under it
+            head, sid = "", ""
+        if edit:   # finished in build_tab: source + ✎ button, or a plain card when not editable
+            out.append(f'<section class="{cls}" data-edit-block="{edit.group(1)}"{sid}>{head or ""}{body_html}</section>')
             continue
         out.append(f'<section class="{cls}"{sid}>{head or ""}{body_html}</section>')
     return "".join(out)
 
 
 H2_CLASS_RE = re.compile(r'\sclass="([^"]*)"')
+BLOCK_CLASSES = ("fill", "mobile", "desktop")   # classes on a ## heading that belong to the whole card
 IMAGE_ONLY_RE = re.compile(r"^\s*<p>\s*(?:<a [^>]*>\s*)?<img [^>]*>\s*(?:</a>\s*)?</p>\s*$")
 
 
 def slug(text):
-    """Block anchor: "Odstavce a zalomení" -> "odstavce-a-zalomeni"."""
+    """Card anchor: "Odstavce a zalomení" -> "odstavce-a-zalomeni"."""
     t = unicodedata.normalize("NFKD", html.unescape(text)).encode("ascii", "ignore").decode().lower()
     return re.sub(r"[^a-z0-9]+", "-", t).strip("-") or "blok"
 
@@ -1695,6 +1953,18 @@ def valid_target(t):
     return valid_http(t)
 
 
+def demo_check(tag, target, classes):
+    """{.check .demo} (+ .warn / .down): a made-up status for demo pages, the server checks nothing.
+    The response time is stable for the same address; {ms=…} on the link sets it."""
+    state = "down" if "down" in classes else "warn" if "warn" in classes else "up"
+    ms = (m.group(1) if (m := re.search(r'\sms="(\d+)"', tag)) else
+          str(8 + int(hashlib.sha1(target.encode()).hexdigest(), 16) % 70))
+    tag = re.sub(r'\sms="\d+"', "", tag)
+    info = {"up": f"200 · {ms} ms", "warn": f"401 · {ms} ms", "down": "timeout"}[state]
+    title = html.escape(f"{target}\n{state} · {info} (demo)")
+    return tag[:-1] + f' data-check="{html.escape(target)}" data-demo-check data-state="{state}" title="{title}">'
+
+
 def mark_checks(htm):
     """A link with {.check} (target = href) or {check="tcp://host:port"} -> data-check="target"."""
     def fix(m):
@@ -1708,6 +1978,8 @@ def mark_checks(htm):
             target = target or (html.unescape(h.group(1)) if (h := HREF_RE.search(tag)) else None)
             cls = (ccm.group(1) + ccm.group(2)).strip()
             tag = tag.replace(ccm.group(0), f' class="{cls}"' if cls else "")
+        if target and ccm and "demo" in cls.split():
+            return demo_check(tag, target, cls.split())
         if not target or not valid_target(target):
             return tag
         CHECK_TARGETS.add(target)
@@ -1796,7 +2068,7 @@ window.h6082 = (() => {
   });
 
   async function checks() {
-    const els = [...document.querySelectorAll('[data-check]')].filter((e) => !e.closest('.ld-preview'));
+    const els = [...document.querySelectorAll('[data-check]')].filter((e) => !e.closest('.ld-preview') && !e.hasAttribute('data-demo-check'));
     if (!els.length) return;
     const targets = [...new Set(els.map((e) => e.dataset.check))];
     const r = await api('/api/check', {method: 'POST', body: JSON.stringify({targets})}).catch(() => null);
@@ -1812,7 +2084,7 @@ window.h6082 = (() => {
 
   const ago = (ts) => {
     const m = Math.round((Date.now() / 1000 - ts) / 60);
-    return m < 60 ? m + ' min' : m < 1440 ? Math.round(m / 60) + ' h' : Math.round(m / 1440) + ' d';
+    return m < 60 ? m + '\u00a0min' : m < 1440 ? Math.round(m / 60) + '\u00a0h' : Math.round(m / 1440) + '\u00a0d';
   };
   async function rss() {
     for (const box of document.querySelectorAll('.rss[data-feed]:not([data-done])')) {
@@ -2047,7 +2319,7 @@ window.h6082 = (() => {
     setTimeout(() => { b.classList.remove('done', 'fail'); b.title = T.copy; }, 1500);
   });
 
-  // ---- ##* blocks: ✎ opens the block's markdown in place, saved through /api/block
+  // ---- ##* cards: ✎ opens the card's markdown in place, saved through /api/block
   document.addEventListener('click', (e) => {
     const b = e.target.closest('.block-edit');
     if (!b) return;
@@ -2108,24 +2380,61 @@ window.h6082 = (() => {
       try { data = JSON.parse(box.querySelector('.ld-data').textContent); } catch (e) { return; }
       if (!data.scenes || !data.scenes.length) return;
       const $ = (s) => box.querySelector(s);
-      const src = $('.ld-src'), view = $('.ld-preview'), btn = $('.ld-toggle'), file = $('.ld-file');
+      const src = $('.ld-src'), view = $('.ld-view'), pane = $('.ld-preview'), btn = $('.ld-toggle'), file = $('.ld-file');
       const saved = $('.ld-saved'), mouse = $('.ld-mouse'), stage = $('.ld-stage'), win = $('.ld-win');
       const esc = (t) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;');
       const hl = (t) => !t ? '' : typeof window.highlightText === 'function' ? window.highlightText(t, 'md') : esc(t);
       let paused = false, visible = true;
       const running = () => !paused && visible && !document.hidden;
       const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+      const ABORT = {};                     // thrown out of the playback when the progress line is clicked
+      let aborted = false, spent = 0;
+      const SPEED = data.speed || 1;         // {{livedemo … 1.2x}}
+      box.style.setProperty('--ld-speed', SPEED);   // the mouse glides in step with it
       async function wait(ms) {             // time runs only while playing and on screen
-        while (ms > 0) { const d = Math.min(ms, 60); await sleep(d); if (running()) ms -= d; }
+        ms /= SPEED;
+        while (ms > 0) {
+          if (aborted) throw ABORT;
+          const d = Math.min(ms, 60); await sleep(d);
+          if (aborted) throw ABORT;
+          if (running()) { ms -= d; spent += d * SPEED; progress(); }
+        }
       }
       function draw(lines, caret, mark) {
-        src.innerHTML = lines.map((l, i) => '<span class="ld-ln' + (i === mark ? ' ld-chg' : '') + '">' + hl(l) +
+        const marked = (i) => Array.isArray(mark) ? i >= mark[0] && i < mark[1] : i === mark;
+        src.innerHTML = lines.map((l, i) => '<span class="ld-ln' + (marked(i) ? ' ld-chg' : '') + '">' + hl(l) +
           (i === caret ? '<span class="ld-caret"></span>' : '') + '</span>').join('\\n');
-        const at = mark != null ? mark : caret;
+        const at = Array.isArray(mark) ? mark[0] : mark != null ? mark : caret;
         const el = at != null && at >= 0 ? src.children[at] : null;
         src.scrollTop = el ? Math.max(0, el.offsetTop - src.clientHeight * (mark != null ? 0.45 : 0.7)) : src.scrollHeight;
       }
+      // the preview scrolls on its own to where something changes, unless the viewer has just scrolled it
+      let userAt = 0;
+      ['wheel', 'touchmove', 'pointerdown', 'keydown'].forEach((ev) =>
+        pane.addEventListener(ev, () => { userAt = Date.now(); }, {passive: true}));
+      function follow(el, force) {
+        if (!el || (!force && Date.now() - userAt < 5000)) return false;
+        const r = el.getBoundingClientRect(), c = pane.getBoundingClientRect();
+        if (r.top >= c.top + 8 && r.bottom <= c.bottom - 8) return false;   // already in sight
+        const top = pane.scrollTop + r.top - c.top - Math.max(12, (c.height - Math.min(r.height, c.height)) * 0.35);
+        pane.scrollTo({top: Math.max(0, top), behavior: 'smooth'});
+        return true;
+      }
+      // which card changed: the first piece of the new state that the shown one did not have (any change,
+      // an image too; made-up widget data does not count, it is not in the pieces)
+      let shownH = null;
+      const isBlock = (i) => data.pieces[i].startsWith('<section class="block');
+      function changedBlock(prev, h) {
+        if (prev == null) return -1;
+        const old = new Set(data.states[prev]), ids = data.states[h];
+        const j = ids.findIndex((i) => !old.has(i));
+        if (j < 0) return -1;
+        const k = ids.slice(0, j).filter(isBlock).length;   // cards before the changed piece
+        return isBlock(ids[j]) ? k : k - 1;                 // the piece starts a card, or is inside the one before
+      }
       function show(h) {                    // a prepared state, with "+ new task" under task lists like on the page
+        const at = changedBlock(shownH, h);
+        shownH = h;
         view.innerHTML = data.states[h].map((i) => data.pieces[i]).join('');
         view.querySelectorAll('ul.task-list').forEach((ul) => {
           if (ul.parentElement.closest('.task-list')) return;
@@ -2135,19 +2444,27 @@ window.h6082 = (() => {
           f.append(inp); li.append(f); ul.append(li);
         });
         widgets();
+        if (at >= 0) follow(view.querySelectorAll('section.block')[at]);
       }
-      let opened = [];
+      let opened = [], flipped = {};          // details opened / ##- cards toggled by the mouse, kept across states
       function widgets() {
         const demoSys = [...view.querySelectorAll('.sys[data-demo]')];
         if (demoSys.length) renderSys(demoSys, DEMO_SYS());
         if (view.querySelector('.hist-box')) hist();
+        dates(view);
+        emails();
         copyButtons();
         const folds = view.querySelectorAll('details');
         opened.forEach((n) => { if (folds[n - 1]) folds[n - 1].open = true; });
+        const fb = view.querySelectorAll('section.block.fold');
+        Object.keys(flipped).forEach((n) => { if (flipped[n] && fb[n - 1]) fb[n - 1].classList.toggle('folded'); });
       }
-      const finalLines = (sc) => sc.steps.reduce((ls, st) => st.k === 'line' ? ls.concat([st.text]) : st.src.slice(), []);
+      const linesBefore = (sc, k) => sc.steps.slice(0, k).reduce((ls, st) => {
+        if (st.k === 'line') { const n = ls.slice(); n.splice(st.at, st.rep ? 1 : 0, st.text); return n; }
+        return st.src ? st.src.slice() : ls;
+      }, []);
       if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-        draw(finalLines(data.scenes[0])); btn.hidden = true; return;
+        draw(linesBefore(data.scenes[0], data.scenes[0].steps.length)); btn.hidden = true; $('.ld-prog').hidden = true; $('.ld-skip').hidden = true; $('.ld-loop').hidden = true; $('.ld-max-btn').hidden = true; return;
       }
       // typing speed: the lines of a scene take about `seconds`
       const per = (sc) => {
@@ -2156,16 +2473,18 @@ window.h6082 = (() => {
         return Math.max(12, Math.min(90, (data.seconds * 1000 - ls.length * 160) / chars));
       };
       async function moveTo(el, fx, fy) {
+        if (pane.contains(el) && follow(el, true)) await wait(380);   // scroll the target into sight first
         const r = el.getBoundingClientRect(), s = stage.getBoundingClientRect();
-        mouse.style.transform = 'translate(' + (r.left - s.left + r.width * (fx == null ? 0.5 : fx)) + 'px,' +
-          (r.top - s.top + r.height * (fy == null ? 0.5 : fy)) + 'px)';
+        // `translate`, not transform: translate(): the `scale` of a click / ripple must not scale the position too
+        mouse.style.translate = (r.left - s.left + r.width * (fx == null ? 0.5 : fx)) + 'px ' +
+          (r.top - s.top + r.height * (fy == null ? 0.5 : fy)) + 'px';
         mouse.classList.add('on');
         await wait(850);
       }
       async function click() {
         mouse.classList.add('down');
         const r = document.createElement('span');
-        r.className = 'ld-ripple'; r.style.transform = mouse.style.transform;
+        r.className = 'ld-ripple'; r.style.translate = mouse.style.translate;
         stage.append(r); setTimeout(() => r.remove(), 600);
         await wait(160); mouse.classList.remove('down'); await wait(200);
       }
@@ -2178,7 +2497,7 @@ window.h6082 = (() => {
       }
       function apply(st) {                  // the page saved the change: file and preview in sync
         show(st.h);
-        draw(st.src, -1, st.at);
+        draw(st.src, -1, st.len > 1 ? [st.at, st.at + st.len] : st.at);
         saved.textContent = data.saved;
         saved.classList.add('on'); win.classList.add('ld-sync');
         setTimeout(() => { saved.classList.remove('on'); win.classList.remove('ld-sync'); }, 1800);
@@ -2187,6 +2506,14 @@ window.h6082 = (() => {
         if (st.k === 'hover') {               // a hint: the mouse rests on [?]
           const el = view.querySelectorAll('.tip')[st.n - 1];
           if (el) { await moveTo(el); el.classList.add('ld-show'); await wait(2600); el.classList.remove('ld-show'); }
+          return;
+        }
+        if (st.k === 'fold') {                // a click on the title of the n-th ##- / ##+ card folds / unfolds it
+          const sec = view.querySelectorAll('section.block.fold')[st.n - 1];
+          if (sec) {
+            await moveTo(sec.querySelector(':scope > h2'), 0.12, 0.5); await click();
+            sec.classList.toggle('folded'); flipped[st.n] = !flipped[st.n]; await wait(1400);
+          }
           return;
         }
         if (st.k === 'open') {                // a folded callout opens
@@ -2251,7 +2578,7 @@ window.h6082 = (() => {
         if (typeof window.suggestItems !== 'function') return null;
         const S = window.suggestItems((window.H6082_SUGGEST || {}).lang === 'cs');
         let m, typed, items, want, jump;
-        if ((m = /^(#{1,3}[+\\-_*]*)(\\s|$)/.exec(text))) {
+        if ((m = /^(#{1,3}[+\\-*]*)(\\s|$)/.exec(text))) {
           typed = m[1].slice(0, 2); items = S.COLS; want = m[1] + ' ';
           jump = Math.min(text.length, m[1].length + 1);
         } else if ((m = /^> \\[!(\\w+)\\](-?)/.exec(text))) {
@@ -2264,44 +2591,105 @@ window.h6082 = (() => {
         const sel = list.findIndex((x) => x.text.replace(/§/g, '').startsWith(want));
         return sel < 0 ? null : {kind: want, typed: typed.length, list, sel, jump};
       }
-      async function suggestShow(p) {
-        const row = (x, i) => '<div class="sg-item' + (i === p.at ? ' on' : '') + '"><code>' +
-          esc(x.text.replace(/§/g, '').replace(/\\n[\\s\\S]*/, ' …')) + '</code><small>' + esc(x.desc) + '</small></div>';
-        const paint = () => { sgBox.innerHTML = p.list.slice(0, 7).map(row).join(''); };
-        p.at = 0; paint();
+      // the list opens next to the caret and stays while the line is typed on (typing does not stop);
+      // the highlight walks down to the item the line ends up as
+      const sgRow = (p, x, i) => '<div class="sg-item' + (i === p.at ? ' on' : '') + '"><code>' +
+        esc(x.text.replace(/§/g, '').replace(/\\n[\\s\\S]*/, ' …')) + '</code><small>' + esc(x.desc) + '</small></div>';
+      const sgPaint = (p) => { sgBox.innerHTML = p.list.slice(0, 7).map((x, i) => sgRow(p, x, i)).join(''); };
+      function suggestOpen(p) {
+        p.at = 0; sgPaint(p);
         const c = src.querySelector('.ld-caret'), w = win.getBoundingClientRect();
         const r = c ? c.getBoundingClientRect() : w;
         sgBox.style.left = Math.max(6, Math.min(r.left - w.left, w.width - 300)) + 'px';
         sgBox.hidden = false;
         const below = r.bottom - w.top + 4;     // under the caret, or above it when the window ends
         sgBox.style.top = (below + sgBox.offsetHeight > w.height ? r.top - w.top - sgBox.offsetHeight - 4 : below) + 'px';
-        await wait(650);
-        while (p.at < Math.min(p.sel, 6)) { p.at += 1; paint(); await wait(260); }
-        await wait(450);
-        sgBox.hidden = true;
       }
 
-      async function scene(sc) {
-        const ms = per(sc);
-        file.textContent = sc.file; view.innerHTML = ''; opened = [];
-        let lines = [''];
+      // time line of the whole loop (estimated ms): where each scene and step starts
+      const est = (st, ms) => {
+        const typing = (t) => (t || '').length * ms * 1.3;
+        return st.k === 'line' ? (st.text || '').length * ms + (st.text.trim() ? 130 : 380)
+          : st.k === 'at' ? 750 : st.k === 'wait' ? st.s * 1000 : st.k === 'paste' ? 1100 : st.k === 'set' ? 0
+          : st.k === 'hover' ? 3450 : st.k === 'open' ? 3400 : st.k === 'copy' ? 2800 : st.k === 'fold' ? 2600
+          : st.k === 'tick' ? 2760 : st.k === 'edit' ? 4900 + typing(st.text) : 2900 + typing(st.text);
+      };
+      const TL = [];
+      let total = 0;
+      data.scenes.forEach((sc) => {
+        const ms = per(sc), starts = [];
+        let t = total + 600;
+        sc.steps.forEach((st) => { starts.push(t); t += est(st, ms); });
+        TL.push({start: total, starts, end: t});
+        total = t + 2600;
+      });
+      total += 1400;
+      const prog = $('.ld-prog'), bar = prog.querySelector('i');
+      let span = [0, 0], curSi = 0;          // the line shows the scene now playing, from its start to its end
+      function mark(si, k) {                // the step now playing (-1 = the scene intro, length = after it)
+        const T = TL[si];
+        curSi = si;
+        const a = k < 0 ? T.start : k < T.starts.length ? T.starts[k] : T.end;
+        const b = k < 0 ? (T.starts[0] != null ? T.starts[0] : T.end) : k + 1 < T.starts.length ? T.starts[k + 1]
+          : k < T.starts.length ? T.end : si + 1 < TL.length ? TL[si + 1].start : total;
+        span = [a, b]; spent = 0; progress();
+      }
+      function progress() {
+        const T = TL[curSi], at = Math.min(span[0] + spent, span[1], T.end);
+        bar.style.width = (Math.max(0, at - T.start) / Math.max(1, T.end - T.start) * 100).toFixed(2) + '%';
+      }
+
+      async function scene(si, from) {
+        const sc = data.scenes[si], ms = per(sc);
+        document.querySelectorAll('a[href^="#scene:"]').forEach((a) => {
+          const r = decodeURIComponent(a.getAttribute('href').slice(7));
+          a.classList.toggle('ld-cur', r === sc.file || r === String(si + 1));
+        });
+        file.textContent = sc.file; opened = []; flipped = {}; sgBox.hidden = true; mouse.classList.remove('on');
+        let lines;
         const shown = new Set();
-        draw(lines, 0); await wait(600);
-        lines = [];
-        for (const st of sc.steps) {
-          if (st.k !== 'line') { await act(st, ms * 1.3); lines = st.src.slice(); continue; }
-          lines.push('');
-          const L = lines.length - 1;
-          const p = shown.size < 4 ? plan(st.text) : null;
-          let from = 0;
-          if (p && !shown.has(p.kind)) {        // a few suggestions per scene, each kind once
-            shown.add(p.kind);
-            for (const ch of st.text.slice(0, p.typed)) { lines[L] += ch; draw(lines, L); await wait(ms * (0.6 + Math.random())); }
-            await suggestShow(p);
-            lines[L] = st.text.slice(0, p.jump); draw(lines, L); from = p.jump;
-            await wait(250);
+        if (from > 0) {                       // after a seek: the file and the page as they were before that step
+          lines = linesBefore(sc, from);
+          const last = sc.steps.slice(0, from).reverse().find((x) => 'h' in x);
+          shownH = null;
+          if (last) { show(last.h); view.dataset.h = last.h; } else { view.innerHTML = ''; view.dataset.h = ''; }
+          draw(lines, -1);
+        } else {
+          view.innerHTML = ''; view.dataset.h = ''; shownH = null;
+          mark(si, -1); draw([''], 0); await wait(600);
+          lines = [];
+        }
+        for (let k = from; k < sc.steps.length; k++) {
+          const st = sc.steps[k];
+          mark(si, k);
+          if (st.k === 'at') {                  // the caret jumps to where the next lines go
+            draw(lines, st.line); if (st.line < 0) src.scrollTop = 0; await wait(750); continue;
           }
-          for (const ch of st.text.slice(from)) { lines[L] += ch; draw(lines, L); await wait(ms * (0.5 + Math.random())); }
+          if (st.k === 'wait') { draw(lines, -1); await wait(st.s * 1000); continue; }   // {{wait 10}}
+          if (st.k === 'set') {                 // {{example <part>}}: the page as it was where the part starts
+            lines = st.src.slice(); show(st.h); view.dataset.h = st.h; draw(lines, -1); continue;
+          }
+          if (st.k === 'paste') {               // a block of text arrives at once
+            lines = st.src.slice(); show(st.h); view.dataset.h = st.h;
+            draw(lines, -1, [st.at, st.at + st.n]); await wait(1100); continue;
+          }
+          if (st.k !== 'line') { await act(st, ms * 1.3); lines = st.src.slice(); continue; }
+          const L = st.at;
+          if (st.rep) {                         // {{swap}}: the old line is deleted, then the new one typed
+            while (lines[L]) { lines[L] = lines[L].slice(0, -1); draw(lines, L); await wait(ms * 0.35); }
+            lines[L] = '';
+          } else lines.splice(L, 0, '');
+          const p = shown.size < 4 ? plan(st.text) : null;
+          const sg = p && !shown.has(p.kind) ? p : null;   // a few suggestions per scene, each kind once
+          if (sg) shown.add(sg.kind);
+          let n = 0;
+          for (const ch of st.text) {
+            lines[L] += ch; draw(lines, L); n++;
+            if (sg && n === sg.typed) suggestOpen(sg);
+            else if (sg && n > sg.typed && sg.at < Math.min(sg.sel, 6)) { sg.at++; sgPaint(sg); }
+            await wait(ms * (0.5 + Math.random()));
+          }
+          if (sg) { await wait(350); sgBox.hidden = true; }
           if (!st.text) draw(lines, L);
           if (view.dataset.h !== String(st.h)) { show(st.h); view.dataset.h = st.h; }
           await wait(st.text.trim() ? 130 : 380);
@@ -2310,24 +2698,172 @@ window.h6082 = (() => {
         draw(lines, -1);
         mouse.classList.remove('on');
       }
-      btn.addEventListener('click', () => { paused = !paused; btn.textContent = paused ? '▶' : '❚❚'; });
+      function pause(x) { paused = x; btn.textContent = paused ? '▶' : '❚❚'; box.classList.toggle('ld-paused', paused); }
+      box.ldScene = (ref) => {               // [text](#scene:file.md) / (#scene:3) anywhere on the page
+        const si = /^\\d+$/.test(ref) ? +ref - 1 : data.scenes.findIndex((x) => x.file === ref);
+        if (!(si >= 0 && si < data.scenes.length)) return false;
+        seekTo = {si, k: 0}; aborted = true; pause(false);
+        return true;
+      };
+      btn.addEventListener('click', () => pause(!paused));
+      box.addEventListener('click', (e) => {   // a click anywhere in the demo pauses / resumes it
+        if (e.target.closest('.ld-prog, .ld-toggle, .ld-skip, .ld-loop, .ld-max-btn')) return;
+        if (box.classList.contains('mini') && !box.classList.contains('ld-max')) { setMax(true); return; }  // small: a click enlarges
+        pause(!paused);
+      });
+      let seekTo = null;
+      const maxBtn = $('.ld-max-btn');      // over the whole window and back (button, Esc)
+      function setMax(on) {
+        box.classList.toggle('ld-max', on);
+        document.body.classList.toggle('ld-max-open', !!document.querySelector('.livedemo.ld-max'));
+        maxBtn.title = on ? data.unmax : data.max; maxBtn.setAttribute('aria-label', maxBtn.title);
+      }
+      maxBtn.addEventListener('click', () => setMax(!box.classList.contains('ld-max')));
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && box.classList.contains('ld-max')) setMax(false); });
+      document.addEventListener('click', (e) => {   // a click beside the floating card closes it
+        if (box.classList.contains('ld-max') && !box.contains(e.target)) setMax(false);
+      }, true);
+      const fold = box.closest('details.ld-mini');   // ```md live: unfolding plays it from the start
+      if (fold) fold.addEventListener('toggle', () => { if (fold.open) box.ldScene('1'); else setMax(false); });
+      let looping = true;                     // the loop button: off = stop at the end of each scene
+      const loopBtn = $('.ld-loop');
+      loopBtn.addEventListener('click', () => {
+        looping = !looping; loopBtn.setAttribute('aria-pressed', String(looping));
+      });
+      const skip = $('.ld-skip');
+      if (data.scenes.length < 2) skip.hidden = true;
+      skip.addEventListener('click', () => {   // the next scene (after the last one the first)
+        seekTo = {si: (curSi + 1) % data.scenes.length, k: 0}; aborted = true; pause(false);
+      });
+      prog.addEventListener('click', (e) => {  // a click on the line: jump to that moment of the scene
+        const r = prog.getBoundingClientRect();
+        const si = curSi, T = TL[si];
+        const t = T.start + Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * (T.end - T.start);
+        let k = 0;
+        while (k + 1 < TL[si].starts.length && TL[si].starts[k + 1] <= t) k++;
+        seekTo = {si, k};
+        aborted = true;
+      });
       if (window.IntersectionObserver) {
         new IntersectionObserver((es) => { visible = es[0].isIntersecting; }).observe(box);
       }
       (async () => {
+        let si = 0, k = 0;
         for (;;) {
-          for (const sc of data.scenes) { await scene(sc); await wait(2600); }
-          await wait(1400);
+          try {
+            for (; si < data.scenes.length; si++, k = 0) {
+              await scene(si, k);
+              mark(si, data.scenes[si].steps.length);
+              if (!looping) pause(true);         // stays on the finished scene until ▶ / next / a scene link
+              await wait(si + 1 < data.scenes.length ? 2600 : 4000);
+            }
+            si = 0;
+          } catch (e) {
+            if (e !== ABORT) throw e;
+            aborted = false; ({si, k} = seekTo); seekTo = null;
+            box.querySelectorAll('.ld-hover, .ld-show').forEach((x) => x.classList.remove('ld-hover', 'ld-show'));
+            win.classList.remove('ld-sync'); saved.classList.remove('on');
+          }
         }
       })();
     });
   }
 
+  // ---- dates: {{countdown …}} and task due dates (@2026-11-20), counted in the browser by its clock
+  const CS = (document.documentElement.lang || 'en').slice(0, 2) === 'cs';
+  const parseIso = (v) => {
+    const [d, t] = v.split('T'); const [y, mo, da] = d.split('-').map(Number);
+    const [h, mi] = t ? t.split(':').map(Number) : [0, 0];
+    return new Date(y, mo - 1, da, h, mi);
+  };
+  const dayDiff = (dt) => {
+    const n = new Date();
+    return Math.round((new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()) - new Date(n.getFullYear(), n.getMonth(), n.getDate())) / 864e5);
+  };
+  const czPl = (n, one, few, many) => (n === 1 ? one : n >= 2 && n <= 4 ? few : many);
+  const daysText = (n) => CS ? n + ' ' + czPl(n, 'den', 'dny', 'dní') : n + (n === 1 ? ' day' : ' days');
+  function relText(dt, hasTime) {
+    const days = dayDiff(dt);
+    if (hasTime) {
+      const min = Math.round((dt - new Date()) / 6e4), hr = Math.round(min / 60);
+      if (Math.abs(min) < 60) return CS ? (min >= 0 ? 'za ' + min + ' min' : 'před ' + -min + ' min') : (min >= 0 ? 'in ' + min + ' min' : -min + ' min ago');
+      if (Math.abs(hr) < 24) return CS ? (hr >= 0 ? 'za ' + hr + ' h' : 'před ' + -hr + ' h') : (hr >= 0 ? 'in ' + hr + ' h' : -hr + ' h ago');
+    }
+    if (days === 0) return CS ? 'dnes' : 'today';
+    if (days === 1) return CS ? 'zítra' : 'tomorrow';
+    if (days === -1) return CS ? 'včera' : 'yesterday';
+    if (days > 0) return CS ? 'za ' + daysText(days) : 'in ' + daysText(days);
+    return CS ? 'před ' + -days + ' ' + czPl(-days, 'dnem', 'dny', 'dny') : daysText(-days) + ' ago';
+  }
+  const fullDate = (dt, hasTime) => dt.toLocaleString(T.locale, hasTime
+    ? {day: 'numeric', month: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'}
+    : {day: 'numeric', month: 'numeric', year: 'numeric'});
+  function timeOf(el) {                   // [datetime="2026-11-20T14:00"] or [data-rel="3" data-time="14:00"]
+    if (el.dataset.rel != null) {
+      const n = new Date(), [h, mi] = (el.dataset.time || '0:0').split(':').map(Number);
+      return [new Date(n.getFullYear(), n.getMonth(), n.getDate() + Number(el.dataset.rel), h, mi), !!el.dataset.time];
+    }
+    const v = el.getAttribute('datetime');
+    return [parseIso(v), v.includes('T')];
+  }
+  function dates(root) {
+    (root || document).querySelectorAll('time.countdown').forEach((el) => {
+      const [dt, t] = timeOf(el);
+      el.textContent = el.dataset.mode === 'days' ? daysText(Math.abs(dayDiff(dt))) : relText(dt, t);
+      el.title = fullDate(dt, t);
+    });
+    (root || document).querySelectorAll('time.due').forEach((el) => {
+      const [dt, t] = timeOf(el), days = dayDiff(dt);
+      const over = t ? dt < new Date() : days < 0;
+      el.textContent = Math.abs(days) <= 7 ? relText(dt, t)
+        : dt.toLocaleDateString(T.locale, CS ? {day: 'numeric', month: 'numeric'} : {day: 'numeric', month: 'short'});
+      el.title = fullDate(dt, t);
+      el.classList.toggle('over', over);
+      el.classList.toggle('soon', !over && days <= 3);
+    });
+  }
+
+  // ---- ##- / ##+ cards: a click on the title folds / unfolds; remembered in this browser per page and card
+  function folds() {
+    document.querySelectorAll('section.block.fold:not([data-fold])').forEach((sec) => {
+      sec.dataset.fold = '1';
+      const h = sec.querySelector(':scope > h2');
+      if (!h || sec.closest('.ld-view')) return;        // the livedemo preview stays as written
+      const key = 'h6082-fold:' + location.pathname + '#' + (sec.id || '');
+      let st = null;
+      try { st = localStorage.getItem(key); } catch (e) { /* storage blocked: the default from the md */ }
+      if (st === '1') sec.classList.add('folded'); else if (st === '0') sec.classList.remove('folded');
+      h.tabIndex = 0; h.setAttribute('role', 'button');
+      const sync = () => h.setAttribute('aria-expanded', String(!sec.classList.contains('folded')));
+      const toggle = () => {
+        sec.classList.toggle('folded'); sync();
+        try { localStorage.setItem(key, sec.classList.contains('folded') ? '1' : '0'); } catch (e) { /* for this visit only */ }
+      };
+      sync();
+      h.addEventListener('click', toggle);
+      h.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+    });
+  }
+
+  // a link [text](#scene:file.md) or (#scene:3) plays that scene of the livedemo on the page
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest && e.target.closest('a[href^="#scene:"]');
+    if (!a) return;
+    e.preventDefault();
+    const ref = decodeURIComponent(a.getAttribute('href').slice(7));
+    const box = [...document.querySelectorAll('.livedemo')].find((b) => b.ldScene && b.ldScene(ref));
+    if (!box) return;
+    const r = box.getBoundingClientRect();
+    if (r.top < 0 || r.bottom > window.innerHeight) box.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+  });
+
   function init() {
+    dates(); folds();
     emails(); checks(); rss(); sys(); hist(); tasksUi(); copyButtons(); livedemos();
     document.querySelectorAll('textarea.note-area').forEach(grow);
   }
   if (CHECK_S > 0) setInterval(checks, CHECK_S * 1000);
+  setInterval(() => dates(), 60000);                    // "in 5 min" keeps counting
   if (SYS_S > 0) setInterval(sys, SYS_S * 1000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) sys(); });
   init();
@@ -2418,10 +2954,13 @@ function suggestItems(cs) {
   const it = (text, desc, eat) => ({text, desc, eat});
   const COLS = [
     it('# ', L('column', 'sloupec')), it('#+ ', L('column 1.5× wide', 'sloupec 1,5× širší')),
-    it('#++ ', L('column 2× wide', 'sloupec 2× širší')), it('#- ', L('column 0.5×', 'sloupec 0,5×')),
-    it('#-- ', L('column 0.25×', 'sloupec 0,25×')), it('#__ ', L('full-width row', 'pás přes celou šířku')),
-    it('## ', L('block', 'blok')), it('##* ', L('block editable on the page', 'blok upravitelný na stránce')),
-    it('## `§title§`', L('column heading, no frame', 'nadpis sloupce bez rámečku')),
+    it('#++ ', L('column 1.75× wide', 'sloupec 1,75× širší')), it('#- ', L('column 0.5×', 'sloupec 0,5×')),
+    it('#-- ', L('column 0.25×', 'sloupec 0,25×')), it('#§1.2§ ', L('column, own relative width', 'sloupec s vlastní relativní šířkou')),
+    it('#§60§px ', L('column, fixed width', 'sloupec s pevnou šířkou')),
+    it('## ', L('card', 'karta')), it('##* ', L('card editable on the page', 'karta upravitelná na stránce')),
+    it('##. `§title§`', L('card without frame (column heading)', 'karta bez rámečku (nadpis sloupce)')),
+    it('##- ', L('card, folded (a click opens it)', 'karta sbalená (klik ji otevře)')),
+    it('##+ ', L('card that can be folded', 'karta, která jde sbalit')),
     it('### ', L('subheading', 'podnadpis')),
   ];
   const SC = [
@@ -2430,11 +2969,12 @@ function suggestItems(cs) {
     it('{{history 10}}', L('recent changes', 'poslední změny')),
     it('{{note}}\n§\n{{/note}}', L('note editable on the page', 'poznámka upravitelná na stránce')),
     it('{{email §name§ domain}}', L('protected e-mail', 'chráněný e-mail')),
+    it('{{gear}}', L('the settings gear inside text', 'ozubené kolečko nastavení v textu')),
+    it('{{countdown §2026-12-24§}}', L('time to / since a date', 'odpočet do / od data')),
     it('{{files}}', L('list of files', 'seznam souborů')),
     it('{{newfile}}', L('new file form', 'formulář pro nový soubor')),
     it('{{theme}}', L('theme picker', 'výběr motivu')),
     it('{{lang}}', L('language switch', 'přepínač jazyka')),
-    it('{{livedemo 30}}\n§\n{{/livedemo}}', L('animated editor demo', 'animovaná ukázka editoru')),
   ];
   const CALL = [['tip', L('green hint', 'zelený tip')], ['note', L('blue note', 'modrá poznámka')],
     ['info', L('info', 'informace')], ['warning', L('warning', 'varování')], ['danger', L('danger', 'nebezpečí')],
@@ -2444,7 +2984,8 @@ function suggestItems(cs) {
   const CLS = [['.check', L('status dot of a link', 'tečka stavu odkazu')], ['.center', L('centred', 'na střed')],
     ['.right', L('to the right', 'doprava')], ['.big', L('bigger text', 'větší písmo')], ['.huge', L('huge text', 'velké písmo')],
     ['.small', L('smaller text', 'menší písmo')], ['.muted', L('muted colour', 'tlumená barva')],
-    ['.fill', L('block fills the column height', 'blok vyplní výšku sloupce')]].map(([k, d]) => it(k, d));
+    ['.fill', L('card fills the column height', 'karta vyplní výšku sloupce')],
+    ['.mobile', L('only on phones', 'jen na telefonu')], ['.desktop', L('only on larger screens', 'jen na větší obrazovce')]].map(([k, d]) => it(k, d));
   const LANGS = ['bash', 'python', 'toml', 'json', 'yaml', 'js', 'html', 'css', 'sql', 'text']
     .map((k) => it('```' + k, L('code block', 'blok kódu')));
   const TASK = [it('[ ] ', L('task', 'úkol')), it('[x] ', L('done task', 'hotový úkol'))];
@@ -2637,7 +3178,7 @@ function smartEditor(ta, MD) {
       let m;
       if ((m = /^```(\w*)$/.exec(before))) return {from: ls, q: before, items: fence ? [] : LANGS};
       if (fence) return null;
-      if ((m = /^#{1,3}[+\-_*]*$/.exec(before))) return {from: ls, q: before, items: COLS};
+      if ((m = /^#{1,3}[+\-*]*$/.exec(before))) return {from: ls, q: before, items: COLS};
       if ((m = /\{\{(\w*)$/.exec(before))) return {from: s - m[0].length, q: m[0], items: SC, eat: /^\}{1,2}/};
       if ((m = /^>\s?\[!(\w*\]?-?)$/.exec(before))) return {from: ls, q: '> [!' + m[1], items: CALL, eat: /^\]/};
       if ((m = /\{:?\s*(\.[\w-]*)$/.exec(before))) return {from: s - m[1].length, q: m[1], items: CLS};
@@ -2852,8 +3393,8 @@ function highlighter(ta, pre, mode) {
     }
     if (f) { st.fence = f[1]; return span('h-fence', l); }
     let m;
-    if (/^#(\+\+|\+|--|-|__)?(\s.*)?$/.test(l)) return span('h-col', l);
-    if (/^##(\*|\s|$)/.test(l)) return span('h-h2', l);
+    if (/^#(\+\+|\+|--|-|\d+(?:[.,]\d+)?(?:px|em|rem|%)|\d+(?:[.,]\d+)?|[.,]\d+)?(\s.*)?$/.test(l)) return span('h-col', l);
+    if (/^##(\*|\.|-|\+|\s|$)/.test(l)) return span('h-h2', l);
     if ((m = /^(#{3,6})(\s.*)$/.exec(l))) return span('h-h3', l);
     if (/^ {0,3}\/+\s*$/.test(l)) return span('h-gap', l);
     if (/^ {0,3}\/\//.test(l)) return span('h-comment', l);
@@ -2891,7 +3432,7 @@ function highlighter(ta, pre, mode) {
   function paint() {
     queued = false;
     const st = {fence: null};
-    const html = ta.value.split('\n').map((l) => mode === 'md' ? mdLine(l, st) : tomlLine(l)).join('\n');
+    const html = ta.value.split('\n').map((l) => '<span class="ln">' + (mode === 'md' ? mdLine(l, st) : tomlLine(l)) + '</span>').join('\n');
     pre.innerHTML = html + '\n ';   // the extra line keeps the height equal after a final newline
     sync();
   }
@@ -3042,6 +3583,20 @@ __SMART__
   smartEditor(ta, /\\.md$/i.test(NAME));
   const paint = highlighter(ta, document.querySelector('.ed-hl'), /\\.md$/i.test(NAME) ? 'md' : /\\.toml$/i.test(NAME) ? 'toml' : '');
   editorPanes();
+  (() => {                  // line numbers: the button in the bar, remembered in this browser
+    const b = document.getElementById('nums'), box = ta.parentElement, K = 'h6082-ed-nums';
+    if (!b) return;
+    const on = (x) => { box.classList.toggle('nums', x); b.setAttribute('aria-pressed', String(x)); };
+    let stored = null;
+    try { stored = localStorage.getItem(K); } catch (e) {}
+    on(stored === '1');
+    b.addEventListener('click', () => {
+      const x = !box.classList.contains('nums');
+      on(x);
+      try { localStorage.setItem(K, x ? '1' : '0'); } catch (e) {}
+      paint();
+    });
+  })();
   document.getElementById('reload').onclick = () => { if (!dirty() || confirm(T.confirm_discard)) load(); };
   document.getElementById('force').onclick = () => { if (confirm(T.confirm_overwrite)) save(true); };
   // rename / delete / reset to default (buttons next to the file name)
@@ -3069,6 +3624,18 @@ __SMART__
     gone = true;
     location.href = '/edit/' + encodeURIComponent(r.j.name);
   }));
+  const hide = document.getElementById('hide');   // [tabs] hidden: out of the tab bar, reachable from settings
+  if (hide) hide.onclick = async () => {
+    if (hide.hasAttribute('data-demo-off')) return;
+    const on = hide.getAttribute('aria-pressed') !== 'true';
+    const r = await post('POST', '/api/tab-hidden', JSON.stringify({name: hide.dataset.stem, hidden: on}));
+    if (!r.ok) { alert(r.j.error || r.status); return; }
+    hide.setAttribute('aria-pressed', String(on));
+    hide.title = hide.dataset[on ? 'tipOn' : 'tipOff']; hide.setAttribute('aria-label', hide.title);
+    document.querySelectorAll('nav.tabs a.tab').forEach((a) => {
+      if (a.getAttribute('href') === '/' + encodeURIComponent(hide.dataset.stem)) a.hidden = on;
+    });
+  };
   if (ren) ren.onclick = async () => {
     const cur = NAME.replace(/\\.md$/, '');
     const to = (prompt(T.rename_prompt, cur) || '').trim().replace(/\\.md$/, '');
@@ -3151,6 +3718,25 @@ def page(cfg, title, body, scripts="", body_class=""):
 
 
 # a gear: 8 teeth (a dashed ring) around a ring with a hole; colour = currentColor
+def icon(paths, size=15):
+    """A small line icon (24×24 grid, colour = currentColor) for icon buttons."""
+    return (f'<svg viewBox="0 0 24 24" width="{size}" height="{size}" aria-hidden="true" fill="none" '
+            f'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">{paths}</svg>')
+
+
+ICON_RENAME = icon('<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>')
+ICON_EYE = icon('<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>')
+ICON_EYE_OFF = icon('<path d="M2 12s3.5-7 10-7c2 0 3.7.6 5.1 1.6M22 12s-3.5 7-10 7c-2 0-3.7-.6-5.1-1.6"/>'
+                    '<path d="M9.9 9.9a3 3 0 0 0 4.2 4.2M3 3l18 18"/>')
+ICON_DELETE = icon('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>')
+ICON_LOOP = icon('<path d="M4 11V9a3 3 0 0 1 3-3h11"/><path d="M15 3l3 3-3 3"/>'
+                 '<path d="M20 13v2a3 3 0 0 1-3 3H6"/><path d="M9 21l-3-3 3-3"/>', 13)
+ICON_MAX = icon('<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>', 13)
+ICON_CLOSE = icon('<path d="M6 6l12 12M18 6L6 18"/>', 13)
+ICON_SKIP = icon('<path d="M6 5.5l9 6.5-9 6.5z" fill="currentColor"/><path d="M18 5v14"/>', 12)
+ICON_NUMS = icon('<path d="M10 6h10M10 12h10M10 18h10"/><path d="M4 4.5l1.5-1V9" stroke-width="1.6"/>'
+                 '<path d="M3.5 14.5a1.6 1.6 0 1 1 2.6 1.3L3.5 20H7" stroke-width="1.6"/>')
+
 GEAR_SVG = ('<svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" fill="none" stroke="currentColor">'
             '<circle cx="12" cy="12" r="8.4" stroke-width="3.2" stroke-dasharray="3.3 3.3"/>'
             '<circle cx="12" cy="12" r="6.2" stroke-width="2.4"/>'
@@ -3158,7 +3744,7 @@ GEAR_SVG = ('<svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" 
 
 
 def top_pickers(cfg):
-    """Language and theme drop-downs in the top bar of the about page (h6082)."""
+    """Language and theme drop-downs in the top bar of the about page (settings)."""
     cur = cur_lang(cfg)
     langs = "".join(f'<option value="{x}"{" selected" if x == cur else ""}>{LANG_NAMES[x]}</option>' for x in LANGS)
     ths = [("auto", "auto")] + [(n, str(th.get("label", n))) for n, th in themes(cfg).items()]
@@ -3175,6 +3761,11 @@ def tab_bar(cfg, tabs, active, live=True):
         cur = ' aria-current="page"' if on else ""
         return f'<a class="{cls}"{cur} href="/{quote(name)}">{html.escape(tab_label(cfg, name))}</a>'
 
+    if cfg["tabs"].get("examples") and "examples" not in tabs and page_path(cfg, "examples"):
+        # [tabs] examples: the examples page among the user tabs, first unless [tabs] order places it
+        order = list(cfg["tabs"]["order"])
+        i = len([t for t in order[:order.index("examples")] if t in tabs]) if "examples" in order else 0
+        tabs = tabs[:i] + ["examples"] + tabs[i:]
     left, right = [], []
     header = str(cfg["page"]["header"]).strip()
     if header:
@@ -3205,7 +3796,20 @@ def tab_bar(cfg, tabs, active, live=True):
 # The n-th checkbox on the page = the n-th task line in the file.
 
 NOTE_OPEN, NOTE_CLOSE = "{{note}}", "{{/note}}"
-LD_OPEN_RE = re.compile(r"^\{\{\s*livedemo(?:\s+(\d{1,3}))?\s*\}\}$")   # {{livedemo [seconds]}}
+# {{livedemo [seconds] [speed]}}: 10 = a scene is typed in about 10 s; 1.2x (or a decimal 0.75) = everything
+# plays 1.2× / 0.75× as fast
+LD_OPEN_RE = re.compile(r"^\{\{\s*livedemo((?:\s+(?:\d{1,3}|\d+[.,]\d+x?|\d+x))*)\s*\}\}$")
+
+
+def ld_args(m):
+    """(seconds, speed) from a {{livedemo …}} match; defaults 30 s and 1×."""
+    seconds, speed = 30, 1.0
+    for a in m.group(1).split():
+        if a.endswith("x") or "." in a or "," in a:
+            speed = min(max(float(a.rstrip("x").replace(",", ".")), .25), 8)
+        else:
+            seconds = int(a)
+    return seconds, speed
 LD_CLOSE = "{{/livedemo}}"
 TASK_LINE_RE = re.compile(r"^(\s*(?:>\s?)*\s*(?:[-*+]|\d+[.)])\s+)\[([ xX])\](\s.*)?$")
 CHECKBOX_RE = re.compile(r'<input type="checkbox" disabled( checked)?/>')
@@ -3249,21 +3853,25 @@ def source_lines(text):
 
 
 def edit_block_ranges(text):
-    """[(first, last)] line ranges of the bodies of `##*` blocks (without trailing empty lines),
+    """[(first, last)] line ranges of the bodies of `##*` cards (without trailing empty lines),
     counted outside code blocks and notes, in the same order as split_columns numbers them."""
     src = list(source_lines(text))
+    flat = [(line, k == "normal") for _, line, k in src]
     heads = [i for i, line, k in src if k == "normal" and EDIT_BLOCK_RE.match(line)]
     out = []
     for h in heads:
         end = len(src)
         for i, line, k in src[h + 1:]:
-            if k == "normal" and (BLOCK_RE.match(line) or COLUMN_RE.match(line)):
+            if k == "normal" and (BLOCK_RE.match(line) or COLUMN_RE.match(line) or is_row_break(flat, i)):
                 end = i
                 break
+        first = h + 1                          # a `{: … }` line under ##* belongs to the heading, not the body
+        if first < end and ATTR_LINE_RE.match(src[first][1].strip()):
+            first += 1
         last = end
-        while last > h + 1 and not src[last - 1][1].strip():
+        while last > first and not src[last - 1][1].strip():
             last -= 1
-        out.append((h + 1, last))
+        out.append((first, last))
     return out
 
 
@@ -3275,16 +3883,17 @@ def edit_block_source(text, i):
     return "\n".join(text.split("\n")[a:b])
 
 
-EDIT_SECTION_RE = re.compile(r'<section class="block" data-edit-block="(\d+)"([^>]*)>')
+EDIT_SECTION_RE = re.compile(r'<section class="(block[^"]*)" data-edit-block="(\d+)"([^>]*)>')
 
 
 def finish_edit_blocks(cfg, body, raw, editable):
-    """Editable `##*` blocks get their markdown source and a ✎ button; elsewhere plain blocks."""
+    """Editable `##*` cards get their markdown source and a ✎ button; elsewhere plain cards."""
     def sub(m):
-        src = edit_block_source(raw, int(m.group(1))) if editable else None
+        cls, n, rest = m.groups()               # cls: the card's classes (block, fill, mobile …)
+        src = edit_block_source(raw, int(n)) if editable else None
         if src is None:
-            return f'<section class="block"{m.group(2)}>'
-        return (f'<section class="block editable" data-edit-block="{m.group(1)}" data-src="{html.escape(src)}"{m.group(2)}>'
+            return f'<section class="{cls}"{rest}>'
+        return (f'<section class="{cls} editable" data-edit-block="{n}" data-src="{html.escape(src)}"{rest}>'
                 f'<button type="button" class="block-edit" title="{t(cfg, "block_edit")}" aria-label="{t(cfg, "block_edit")}">'
                 f'{EDIT_SVG}</button>')
     return EDIT_SECTION_RE.sub(sub, body)
@@ -3320,6 +3929,62 @@ def note_ranges(text):
     return out
 
 
+# ```md live [seconds] [speed]: the code block as usual, and under it a folded mini livedemo typing it
+LIVE_FENCE_RE = re.compile(r"^(\s*)(`{3,}|~{3,})md\s+live((?:\s+\S+)*)\s*$")
+
+
+def mini_livedemo_html(cfg, body, opts):
+    seconds, speed = 10, 1.0
+    for a in opts.split():
+        if a.endswith("x") or "." in a or "," in a:
+            try:
+                speed = min(max(float(a.rstrip("x").replace(",", ".")), .25), 8)
+            except ValueError:
+                pass
+        elif a.isdigit():
+            seconds = int(a)
+    return livedemo_html(cfg, body, seconds, speed, mini=True)   # shown right in the card, plays while on screen
+
+
+EXAMPLE_RE = re.compile(r"^\{\{\s*example\s+(\S+)\s*\}\}$")   # {{example ukoly.md}}: a scene of /examples
+
+
+def example_scene(cfg, name):
+    """One scene of the examples page (its first {{livedemo}}), so a page can show it small:
+    (scene lines, seconds, speed) or None. One source: editing /examples changes it everywhere."""
+    p = page_path(cfg, "examples")
+    if not p:
+        return None
+    lines = p.read_text(encoding="utf-8").split("\n")
+    fence, a, args = None, None, (30, 1.0)
+    for i, line in enumerate(lines):
+        m = FENCE_RE.match(line)
+        if fence:
+            if m and m.group(1)[0] == fence[0] and len(m.group(1)) >= len(fence):
+                fence = None
+        elif m:
+            fence = m.group(1)
+        elif lm := LD_OPEN_RE.match(line.strip()):
+            a, args = i, ld_args(lm)
+            break
+    if a is None:
+        return None
+    end = next((j for j in range(a + 1, len(lines)) if lines[j].strip() == LD_CLOSE), len(lines))
+    body = lines[a + 1:end]
+    part, at = None, None
+    if not name.endswith(".md"):            # {{example citace}}: the scene that holds {{part citace}}
+        at = next((j for j, l in enumerate(body) if (pm := LD_PART_RE.match(l.strip())) and pm.group(1) == name), None)
+    if at is not None:
+        part = name
+        start = max((j for j in range(at + 1) if LD_SCENE_RE.match(body[j].strip())), default=0)
+    else:
+        start = next((j for j, l in enumerate(body) if (sm := LD_SCENE_RE.match(l.strip())) and sm.group(1) == name), None)
+    if start is None:
+        return None
+    stop = next((j for j in range(start + 1, len(body)) if LD_SCENE_RE.match(body[j].strip())), len(body))
+    return body[start:stop], *args, part
+
+
 def extract_livedemos(cfg, text):
     """{{livedemo [s]}} … {{/livedemo}}: an editor window that types the markdown inside line by
     line while a preview below shows the rendered page. Every preview state is rendered here, so the
@@ -3333,13 +3998,31 @@ def extract_livedemos(cfg, text):
         if fence:
             if m and m.group(1)[0] == fence[0] and len(m.group(1)) >= len(fence):
                 fence = None
+        elif lf := LIVE_FENCE_RE.match(line):
+            tok_f = lf.group(2)
+            end = next((j for j in range(i + 1, len(lines)) if (fm := FENCE_RE.match(lines[j]))
+                        and fm.group(1)[0] == tok_f[0] and len(fm.group(1)) >= len(tok_f)), len(lines))
+            body = lines[i + 1:end]
+            tok = f"H6082LIVE{len(tokens)}X{secrets.token_hex(4)}"
+            tokens[tok] = mini_livedemo_html(cfg, body, lf.group(3) or "")
+            out += [f"{lf.group(1)}{tok_f}md", *body, *(lines[end:end + 1]), "", tok, ""]
+            i = end + 1
+            continue
         elif m:
             fence = m.group(1)
+        elif em := EXAMPLE_RE.match(line.strip()):
+            tok = f"H6082LIVE{len(tokens)}X{secrets.token_hex(4)}"
+            r = example_scene(cfg, em.group(1))
+            tokens[tok] = (livedemo_html(cfg, r[0], r[1], r[2], mini=True, part=r[3]) if r else
+                           f'<p class="ld-missing">⚠ {html.escape(t(cfg, "ld_no_scene", s=em.group(1)))}</p>')
+            out += ["", tok, ""]
+            i += 1
+            continue
         elif (lm := LD_OPEN_RE.match(line.strip())):
             end = next((j for j in range(i + 1, len(lines)) if lines[j].strip() == LD_CLOSE), len(lines))
             body = lines[i + 1:end]
             tok = f"H6082LIVE{len(tokens)}X{secrets.token_hex(4)}"
-            tokens[tok] = livedemo_html(cfg, body, int(lm.group(1) or 30))
+            tokens[tok] = livedemo_html(cfg, body, *ld_args(lm))
             out += ["", tok, ""]
             i = end + 1
             continue
@@ -3349,14 +4032,66 @@ def extract_livedemos(cfg, text):
 
 
 LD_SCENE_RE = re.compile(r"^\{\{\s*scene(?:\s+(\S+))?\s*\}\}$")                 # {{scene file.md}}
-LD_ACT_RE = re.compile(r"^\{\{\s*(tick|add|note|edit|hover|open|copy)\s+(\d{1,2})(?:\s+(.*?))?\s*\}\}$")  # {{tick 2}} …
+LD_PART_RE = re.compile(r"^\{\{\s*part\s+([\w.-]+)\s*\}\}$")   # {{part citace}}: a named part, for {{example citace}}
+LD_ACT_RE = re.compile(r"^\{\{\s*(tick|add|note|edit|hover|open|copy|fold)\s+(\d{1,2})(?:\s+(.*?))?\s*\}\}$")  # {{tick 2}} …
+# where the next lines go: {{at X}} the end of X's column / card (or after a plain line), {{after X}} right
+# under the line X, {{upto X}} right above it, {{swap X}} the next line replaces it. X = the start of a line
+# (first match) or a line number of the scene file at that moment; {{top}} / {{end}} = start / end of the file
+LD_AT_RE = re.compile(r"^\{\{\s*(at|after|upto|swap)\s+(.+?)\s*\}\}$")
+LD_TYPE_RE = re.compile(r"""^\{\{\s*type\s+(["'])(.*)\1\s*\}\}$""")   # {{type "```css"}}: this line, typed here
+LD_QUOTED_TAIL_RE = re.compile(r"""^(.*)\s+(["'])(.*?)\2$""")      # anchor "text": the last quoted part is typed there
+LD_EDGE_RE = re.compile(r"^\{\{\s*(top|end)\s*\}\}$")     # {{top}} / {{end}}: the start / end of the file
+LD_WAIT_RE = re.compile(r"^\{\{\s*wait\s+(\d{1,3}(?:[.,]\d+)?)\s*\}\}$")   # {{wait 10}}: a pause of 10 s
+LD_PASTE, LD_PASTE_END = "{{paste}}", "{{/paste}}"          # lines inserted at once, without typing
 LD_CACHE = {}
-LD_LOOK = ("hover", "open", "copy")     # mouse actions that only show something, the file stays
+
+
+def _ld_line(src, kinds, arg):
+    """Index of the line an anchor names: a line number (1 = first) or the start of a line. Normal lines and
+    code fences (```, ```css) first, so `## X` in a code sample does not win over a real card; text inside a
+    code block / note only when nothing else matches."""
+    if arg.isdigit():
+        i = int(arg) - 1
+        return i if 0 <= i < len(src) else None
+    hits = [k for k, l in enumerate(src) if l.strip().startswith(arg)]
+    return next((k for k in hits if kinds[k] == "normal" or FENCE_RE.match(src[k])), hits[0] if hits else None)
+
+
+def _ld_anchor(src, arg, verb="at"):
+    """Where typing continues after {{at|after|upto|swap …}}. Returns (insert index, caret line,
+    replaced line index or None) or None. `at`: the end of a column (`# label`) or a card
+    (`## title`), right after any other line. The start / end of the file: {{top}} / {{end}}."""
+    kinds = [k for _, _, k in source_lines("\n".join(src))] if src else []
+    i = _ld_line(src, kinds, arg)
+    if i is None:
+        return None
+    if verb == "after":
+        return i + 1, i, None
+    if verb == "upto":
+        return i, i - 1, None
+    if verb == "swap":
+        return i, i, i
+    line = src[i].strip()
+    flat = [(l, k == "normal") for l, k in zip(src, kinds)]
+    if COLUMN_RE.match(line):
+        stop = lambda l, j: COLUMN_RE.match(l) or is_row_break(flat, j)
+    elif BLOCK_RE.match(line):
+        stop = lambda l, j: COLUMN_RE.match(l) or BLOCK_RE.match(l) or is_row_break(flat, j)
+    else:
+        return i + 1, i, None
+    end = i + 1
+    while end < len(src) and not (kinds[end] == "normal" and stop(src[end].strip(), end)):
+        end += 1
+    while end > i + 1 and not src[end - 1].strip():
+        end -= 1
+    return end, i, None
+LD_LOOK = ("hover", "open", "copy", "fold")   # mouse actions that only show something, the file stays
 # made-up feed items for the preview (a demo should not depend on someone else's server)
 LD_FEEDS = {
     "ycombinator": ["Show HN: A start page in one markdown file", "SQLite is enough for most side projects",
                     "The unreasonable effectiveness of plain text", "A visual guide to SSH tunnels",
-                    "Ask HN: What do you self-host in 2026?"],
+                    "Ask HN: What do you self-host in 2026?", "Why your Raspberry Pi SD card died",
+                    "Launch HN: Open-source status pages for homelabs"],
     "toprecepty": ["Dýňová polévka s pečeným česnekem", "Kynuté švestkové knedlíky", "Houbové rizoto za 25 minut",
                    "Pečená zelenina s tahini"],
     "smashing": ["Designing accessible forms that don't annoy", "Variable fonts in production",
@@ -3376,8 +4111,9 @@ def _ld_feed(cfg, args):
     url = args[0] if args else ""
     n = int(args[1]) if len(args) > 1 and args[1].isdigit() else 4
     items = next((v for k, v in LD_FEEDS.items() if k in url), LD_FEED_ANY.get(cur_lang(cfg), LD_FEED_ANY["en"]))[:n]
-    ago = ["12 min", "1 h", "3 h", "5 h", "1 d"]
-    li = "".join(f'<li><a href="{html.escape(url)}">{html.escape(x)}</a><small> {ago[i % 5]}</small>'
+    ago = [x.replace(" ", "\u00a0") for x in ("12 min", "1 h", "3 h", "5 h", "8 h", "14 h", "1 d")]  # never "3 / h"
+    site = m.group(0) if (m := re.match(r"https?://[^/]+/", url + "/")) else url  # the site, not the raw feed
+    li = "".join(f'<li><a href="{html.escape(site)}">{html.escape(x)}</a><small> {ago[i % len(ago)]}</small>'
                  + ('<a class="rss-c" href="#"> 💬</a>' if "ycombinator" in url else "") + "</li>"
                  for i, x in enumerate(items))
     return f'<div class="rss"><ul class="rss-list">{li}</ul></div>'
@@ -3392,7 +4128,7 @@ def _ld_check(m):
 
 
 def _ld_render(cfg, md, text):
-    """One preview state: notes (read-only) and ##* blocks with ✎ like on a real page, no
+    """One preview state: notes (read-only) and ##* cards with ✎ like on a real page, no
     shortcodes, ids and live checks removed so nothing clashes with the page around."""
     body, notes = extract_notes(cfg, text, "", False)
     out = []                          # live widgets: RSS, and server / history always with made-up data
@@ -3437,27 +4173,64 @@ def _ld_act(src, kind, n, arg):
             return None
         end = groups[n - 1][-1] + 1
         return src[:end] + [f"- [ ] {arg}"] + src[end:], end
+    lines = arg.split("\\n")             # {{edit 1 first\nsecond}}: `\n` starts a new line
     if kind == "note":
         rng = note_ranges(text)
         if n > len(rng):
             return None
         end = rng[n - 1][1]
-        return src[:end] + [arg] + src[end:], end
+        return src[:end] + lines + src[end:], end
     ranges = edit_block_ranges(text)
     if n > len(ranges):
         return None
     end = ranges[n - 1][1]
-    return src[:end] + [arg] + src[end:], end
+    return src[:end] + lines + src[end:], end
 
 
-def livedemo_html(cfg, body, seconds):
+def _ld_unquote(a):
+    a = a.strip()
+    return a[1:-1] if len(a) >= 2 and a[0] == a[-1] and a[0] in "\"'" else a
+
+
+def _ld_expand(body):
+    """Quoted values in scene commands, so a line like ```css need not stand free in the md (where it would
+    open a code block): {{swap ``` "```css"}} = {{swap ```}} + the line ```css; {{type "…"}} = that line.
+    The anchor may be quoted too ({{after "## A" '- x'}}); {{paste}} … {{/paste}} stays literal."""
+    out, paste = [], False
+    for line in body:
+        st = line.strip()
+        if paste:
+            out.append(line)
+            paste = st != LD_PASTE_END
+            continue
+        if st == LD_PASTE:
+            paste = True
+            out.append(line)
+            continue
+        if (m := LD_AT_RE.match(st)) and not LD_ACT_RE.match(st):
+            arg = m.group(2)
+            q = LD_QUOTED_TAIL_RE.match(arg)
+            if q and q.group(1).strip():
+                out += ["{{" + f"{m.group(1)} {_ld_unquote(q.group(1))}" + "}}", q.group(3)]
+            else:
+                out.append("{{" + f"{m.group(1)} {_ld_unquote(arg)}" + "}}")
+            continue
+        if tm := LD_TYPE_RE.match(st):
+            out.append(tm.group(2))
+            continue
+        out.append(line)
+    return out
+
+
+def livedemo_html(cfg, body, seconds, speed=1.0, mini=False, part=None):
     """Scenes ({{scene file.md}}) of lines typed in the window and page actions ({{tick n}},
     {{note n text}}, {{edit n text}}) played with a mouse in the preview. Every state is
     rendered here; the browser only swaps prepared HTML."""
-    key = (cur_lang(cfg), cfg["markdown"]["line_breaks"], seconds, "\n".join(body))
+    key = (cur_lang(cfg), cfg["markdown"]["line_breaks"], seconds, speed, mini, part, "\n".join(body))
     if key in LD_CACHE:
         return LD_CACHE[key]
     md = make_md(cfg)
+    body = _ld_expand(body)
     snaps, scenes = [], []
 
     def snap(lines):
@@ -3466,8 +4239,20 @@ def livedemo_html(cfg, body, seconds):
             snaps.append(h)
         return len(snaps) - 1
 
-    scene = None
+    scene, pos, paste, swap = None, None, None, None
     for line in body + [None]:
+        if paste is not None and line is not None:   # collecting {{paste}} … {{/paste}}
+            if line.strip() != LD_PASTE_END:
+                paste.append(line)
+                continue
+            at = len(src) if pos is None else pos
+            src = src[:at] + paste + src[at + (swap is not None):]   # after {{swap}} the paste replaces the line
+            if pos is not None:
+                pos += len(paste)
+            swap = None
+            scene["steps"].append({"k": "paste", "n": len(paste), "src": src, "at": at, "h": snap(src)})
+            paste = None
+            continue
         sm = LD_SCENE_RE.match(line.strip()) if line is not None else None
         if line is None or sm or scene is None:
             if scene is not None:
@@ -3477,28 +4262,78 @@ def livedemo_html(cfg, body, seconds):
                     scenes.append(scene)
             if line is None:
                 break
-            scene, src = {"file": (sm.group(1) if sm and sm.group(1) else "demo.md"), "steps": []}, []
+            scene, src, pos, swap = {"file": (sm.group(1) if sm and sm.group(1) else "demo.md"), "steps": []}, [], None, None
             if sm:
                 continue
+        if line.strip() == LD_PASTE:
+            paste = []
+            continue
+        if pm := LD_PART_RE.match(line.strip()):     # only a mark: where {{example <part>}} starts playing
+            prev = next((x["h"] for x in reversed(scene["steps"]) if "h" in x), None)
+            scene.setdefault("parts", []).append((pm.group(1), len(scene["steps"]), list(src),
+                                                  snap(src) if prev is None else prev))
+            continue
+        if COMMENT_RE.match(line) and not SPACER_RE.match(line):   # a note for the author, not typed
+            continue
+        if wm := LD_WAIT_RE.match(line.strip()):
+            scene["steps"].append({"k": "wait", "s": min(float(wm.group(1).replace(",", ".")), 600)})
+            continue
+        if em := LD_EDGE_RE.match(line.strip()):
+            top = em.group(1) == "top"
+            pos, swap = (0 if top else None), None
+            prev = next((x["h"] for x in reversed(scene["steps"]) if "h" in x), None)
+            scene["steps"].append({"k": "at", "line": -1 if top else len(src) - 1,
+                                   "h": snap(src) if prev is None else prev})
+            continue
+        if (atm := LD_AT_RE.match(line.strip())) and not LD_ACT_RE.match(line.strip()):
+            r = _ld_anchor(src, atm.group(2), atm.group(1))
+            if r is not None:
+                pos = r[0]
+                swap = r[2]
+                prev = next((x["h"] for x in reversed(scene["steps"]) if "h" in x), None)
+                scene["steps"].append({"k": "at", "line": r[1], "h": snap(src) if prev is None else prev})
+            continue
         am = LD_ACT_RE.match(line.strip())
         if am and am.group(1) in LD_LOOK:
             if scene["steps"]:
                 scene["steps"].append({"k": am.group(1), "n": int(am.group(2)), "text": "", "src": src,
-                                       "at": None, "h": scene["steps"][-1]["h"]})
+                                       "at": None, "h": next((x["h"] for x in reversed(scene["steps"]) if "h" in x), 0)})
             continue
         if am:
             r = _ld_act(src, am.group(1), int(am.group(2)), am.group(3) or "")
             if r is None:
                 continue
+            added = len(r[0]) - len(src)
             src, at = r
-            scene["steps"].append({"k": am.group(1), "n": int(am.group(2)), "text": am.group(3) or "",
+            swap = None
+            if pos is not None and added > 0 and at <= pos:
+                pos += added
+            text = (am.group(3) or "") if am.group(1) == "add" else (am.group(3) or "").replace("\\n", "\n")
+            scene["steps"].append({"k": am.group(1), "n": int(am.group(2)), "text": text, "len": max(1, added),
                                    "src": src, "at": at, "h": snap(src)})
             continue
-        src = src + [line]
-        prev = scene["steps"][-1]["h"] if scene["steps"] else None
-        h = snap(src) if line.strip() or prev is None else prev   # an empty line does not change the page
-        scene["steps"].append({"k": "line", "text": line, "h": h})
-    # the states share most blocks: each state is a list of pieces, every piece stored once
+        at = len(src) if pos is None else pos
+        rep = swap is not None                        # {{swap}}: this line replaces the anchor line
+        src = src[:at] + [line] + src[at + rep:]
+        if pos is not None:
+            pos += 1
+        swap = None
+        prev = next((x["h"] for x in reversed(scene["steps"]) if "h" in x), None)
+        h = snap(src) if line.strip() or rep or prev is None else prev   # an empty line does not change the page
+        scene["steps"].append({"k": "line", "text": line, "at": at, "h": h, **({"rep": 1} if rep else {})})
+    for sc in scenes:
+        parts = sc.pop("parts", [])
+        if part is None:
+            continue
+        i = next((n for n, x in enumerate(parts) if x[0] == part), None)
+        if i is None:
+            continue
+        _, a, pre, h = parts[i]            # from the mark to the next one: the page as it was there, then its steps
+        b = parts[i + 1][1] if i + 1 < len(parts) else len(sc["steps"])
+        typed = lambda st: sum(len(x.get("text", "")) for x in st if x["k"] == "line") or 1
+        seconds = seconds * typed(sc["steps"][a:b]) / typed(sc["steps"])   # same typing speed as the whole scene
+        sc["steps"] = ([{"k": "set", "src": pre, "h": h}] if pre else []) + sc["steps"][a:b]
+    # the states share most cards: each state is a list of pieces, every piece stored once
     pool, index, states = [], {}, []
     for h in snaps:
         ids = []
@@ -3508,18 +4343,22 @@ def livedemo_html(cfg, body, seconds):
                 pool.append(piece)
             ids.append(index[piece])
         states.append(ids)
-    data = json.dumps({"scenes": scenes, "pieces": pool, "states": states, "seconds": max(5, min(seconds, 300)),
+    data = json.dumps({"scenes": scenes, "pieces": pool, "states": states, "seconds": max(5, min(seconds, 300)), "speed": speed, "max": t(cfg, "ld_max"), "unmax": t(cfg, "ld_unmax"),
                        "save": t(cfg, "js_block_save"), "cancel": t(cfg, "js_block_cancel"),
                        "saved": t(cfg, "ld_saved")}, ensure_ascii=False)
     data = data.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
-    final = snaps[scenes[0]["steps"][-1]["h"]] if scenes else ""
+    final = snaps[next(x["h"] for x in reversed(scenes[0]["steps"]) if "h" in x)] if scenes else ""
     first = html.escape(scenes[0]["file"]) if scenes else "demo.md"
-    out = (f'<div class="livedemo" role="img" aria-label="{t(cfg, "ld_aria")}">'
+    out = (f'<div class="livedemo{" mini" if mini else ""}" role="img" aria-label="{t(cfg, "ld_aria")}">'
            f'<div class="ld-win"><div class="ld-bar"><i></i><i></i><i></i><span class="ld-file">{first}</span>'
            f'<em class="ld-saved"></em>'
-           f'<button type="button" class="ld-toggle" title="{t(cfg, "ld_pause")}" aria-label="{t(cfg, "ld_pause")}">❚❚</button></div>'
-           f'<pre class="ld-src ed-hl"></pre></div>'
-           f'<div class="ld-stage"><div class="ld-preview" inert>{final}</div>'
+           f'<button type="button" class="ld-loop" aria-pressed="true" title="{t(cfg, "ld_loop")}" aria-label="{t(cfg, "ld_loop")}">{ICON_LOOP}</button>'
+           f'<button type="button" class="ld-skip" title="{t(cfg, "ld_skip")}" aria-label="{t(cfg, "ld_skip")}">{ICON_SKIP}</button>'
+           f'<button type="button" class="ld-toggle" title="{t(cfg, "ld_pause")}" aria-label="{t(cfg, "ld_pause")}">❚❚</button>'
+           f'<button type="button" class="ld-max-btn" title="{t(cfg, "ld_max")}" aria-label="{t(cfg, "ld_max")}">'
+           f'<span class="i-max">{ICON_MAX}</span><span class="i-unmax">{ICON_CLOSE}</span></button></div>'
+           f'<pre class="ld-src ed-hl"></pre><div class="ld-prog" title="{t(cfg, "ld_seek")}"><i></i></div></div>'
+           f'<div class="ld-stage"><div class="ld-preview"><div class="ld-view" inert>{final}</div></div>'
            f'<svg class="ld-mouse" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">'
            f'<path d="M4 2l15 11-6.5 1 4 7.5-3 1.5-4-7.5L4 20z"/></svg></div>'
            f'<script type="application/json" class="ld-data">{data}</script></div>')
@@ -3570,7 +4409,7 @@ def number_tasks(cfg, body, count, editable):
 def smart_js(cfg):
     """SMART_JS with the settings for suggestions (on/off, language, page names for links)."""
     conf = {"off": not cfg["editor"].get("suggest", True), "lang": cur_lang(cfg),
-            "pages": list_tabs(cfg) + ["markdown", "docs", "h6082"]}
+            "pages": list_tabs(cfg) + ["markdown", "documentation", "examples", "settings"]}
     return "window.H6082_SUGGEST = " + json.dumps(conf, ensure_ascii=False).replace("<", "\\u003c") + ";\n" + SMART_JS
 
 
@@ -3656,20 +4495,32 @@ def build_editor(cfg, tabs, fname):
     if p is not None and p.parent == PAGES:
         off = demo_off(cfg)
         del_title = off or f' title="{t(cfg, "ed_delete_title")}"'
-        acts = (f'<button id="ren" type="button" class="tab"{off}>{t(cfg, "ed_rename")}</button>'
-                f'<button id="del" type="button" class="tab danger"{del_title}>{t(cfg, "ed_delete")}</button>')
+        ren_title = "" if off else f' title="{t(cfg, "ed_rename")}"'
+        hidden = stem in cfg["tabs"]["hidden"]       # [tabs] hidden: out of the bar, reachable from settings
+        hide_tip = t(cfg, "ed_unhide" if hidden else "ed_hide")
+        hide_title = "" if off else f' title="{html.escape(hide_tip)}"'
+        acts = (f'<button id="hide" type="button" class="tab icon" aria-pressed="{str(hidden).lower()}"{off}'
+                f'{hide_title} aria-label="{html.escape(hide_tip)}" data-stem="{html.escape(stem)}" '
+                f'data-tip-on="{html.escape(t(cfg, "ed_unhide"))}" data-tip-off="{html.escape(t(cfg, "ed_hide"))}">'
+                f'<span class="i-on">{ICON_EYE_OFF}</span><span class="i-off">{ICON_EYE}</span></button>'
+                f'<button id="ren" type="button" class="tab icon"{off}{ren_title} aria-label="{t(cfg, "ed_rename")}">'
+                f'{ICON_RENAME}</button>'
+                f'<button id="del" type="button" class="tab icon danger"{del_title} aria-label="{t(cfg, "ed_delete")}">'
+                f'{ICON_DELETE}</button>')
     elif fname.startswith("system/") and p.is_file() and default_of(p):
         acts = f'<button id="reset" type="button" class="tab danger"{demo_off(cfg)}>{t(cfg, "ed_reset")}</button>'
     acts = f'<span class="ed-acts">{acts}</span>' if acts else ""
     acts = editor_langs(cfg, fname, p) + acts
-    view = (f'<button id="pv" class="tab" type="button" aria-pressed="true" title="{t(cfg, "ed_preview_title")}">'
+    view = (f'<button id="nums" class="tab icon" type="button" aria-pressed="false" title="{t(cfg, "ed_nums")}" '
+            f'aria-label="{t(cfg, "ed_nums")}">{ICON_NUMS}</button>')
+    view += (f'<button id="pv" class="tab" type="button" aria-pressed="true" title="{t(cfg, "ed_preview_title")}">'
             f'{t(cfg, "ed_preview")}</button>' if preview else "")
     if stem:
         view += f'<a class="tab" href="/{quote(stem)}?lang={plang}">{t(cfg, "ed_view")}</a>'
     if cfg["history"]["enabled"] or DEMO:
         view += f'<a class="tab" href="/history/{quote(fname)}"{demo_off(cfg)}>{t(cfg, "ed_history")}</a>'
     cfg_anchor = "format-configu" if cur_lang(cfg) == "cs" else "config-format"
-    help_href = f"/docs#{cfg_anchor}" if fname == "config.toml" else "/docs#editor"
+    help_href = f"/documentation#{cfg_anchor}" if fname == "config.toml" else "/documentation#editor"
     view += (f'<a class="tab" href="{help_href}" target="_blank" title="{t(cfg, "ed_help_title")}">{t(cfg, "ed_help")}</a>'
              f'<a class="tab" href="/markdown" target="_blank" title="{t(cfg, "ed_md_title")}">markdown ↗</a>')
 
@@ -3720,7 +4571,10 @@ def render_tab(name, embed=False, lang=None):
         f = page_path(cfg, name) if TAB_RE.match(name) and not LANG_SUFFIX_RE.match(name) else None
         if f is None:
             return 404, build_message(cfg, tabs, t(cfg, "msg_no_tab", name=html.escape(name))).encode()
-        key = (str(f), mtime(f), _cfg["mtime"], tuple(all_stems()), cur_lang(cfg))
+        # style.css too: the page links it as ?v=<mtime>, a changed stylesheet must not keep the old link
+        ex = page_path(cfg, "examples")   # {{example …}} on a page shows a scene from /examples
+        key = (str(f), mtime(f), _cfg["mtime"], tuple(all_stems()), cur_lang(cfg), mtime(STATIC / "style.css"),
+               mtime(ex) if ex else 0)
         hit = _cache.get((name, embed, cur_lang(cfg)))
         if hit and hit[0] == key:
             return 200, hit[1]
@@ -3753,7 +4607,7 @@ def editable_path(fname):
 
 
 def tab_of(fname):
-    """Tab name for a file id: demo.cs.md -> demo, system/en/h6082.md -> h6082."""
+    """Tab name for a file id: demo.cs.md -> demo, system/en/settings.md -> settings."""
     stem = Path(fname).stem
     m = LANG_SUFFIX_RE.match(stem)
     return m.group(1) if m and "/" not in fname else stem
@@ -3978,7 +4832,7 @@ def set_toml_value(text, section, key, literal):
     """Sets `key = literal` in [section], keeping the rest of the file and its comments."""
     lines = text.split("\n")
     sec, start = None, None
-    key_re = re.compile(rf"^(\s*{re.escape(key)}\s*=\s*)(\"[^\"]*\"|'[^']*'|[^\s#]+)(.*)$")
+    key_re = re.compile(rf"^(\s*{re.escape(key)}\s*=\s*)(\"[^\"]*\"|'[^']*'|\[[^\]\n]*\]|[^\s#]+)(.*)$")
     for i, line in enumerate(lines):
         h = re.match(r"^\s*\[([^\[\]]+)\]\s*(?:#.*)?$", line)
         if h:
@@ -4420,9 +5274,11 @@ class Handler(BaseHTTPRequestHandler):
         path, qs = unquote(u.path), parse_qs(u.query)
         if path == "/healthz":
             return self._send(200, b"ok\n", "text/plain")
-        if path == "/showcase":  # the built-in page was renamed to "markdown"
+        moved = {"/showcase": "/markdown", "/h6082": "/settings", "/nastaveni": "/settings",
+                 "/docs": "/documentation", "/dokumentace": "/documentation"}
+        if path in moved:  # renamed built-in pages; /nastaveni, /dokumentace = the Czech names
             self.send_response(301)
-            self.send_header("Location", "/markdown" + (f"?{u.query}" if u.query else ""))
+            self.send_header("Location", moved[path] + (f"?{u.query}" if u.query else ""))
             self.send_header("Content-Length", "0")
             self.end_headers()
             return
@@ -4584,6 +5440,49 @@ class Handler(BaseHTTPRequestHandler):
         log.info("theme set to %s", t)
         self._json(200, {"ok": True})
 
+    def _api_examples_tab(self):
+        """POST {on: bool}: [tabs] examples in config.toml (the examples tab on the left of the bar)."""
+        if not (g := self._write_guard()):
+            return
+        cfg, data = g
+        on = bool(data.get("on"))
+        with _lock:
+            text = CFG_FILE.read_text(encoding="utf-8")
+            new = set_toml_value(text, "tabs", "examples", "true" if on else "false")
+            try:
+                if tomllib.loads(new).get("tabs", {}).get("examples") is not on:
+                    raise ValueError
+            except (tomllib.TOMLDecodeError, ValueError):
+                return self._json(500, {"error": t(cfg, "err_config_edit")})
+            if new != text:
+                write_atomic(CFG_FILE, new)
+        log.info("examples tab %s", "on" if on else "off")
+        self._json(200, {"ok": True})
+
+    def _api_tab_hidden(self):
+        """POST {name, hidden: bool}: the user tab `name` into / out of [tabs] hidden in config.toml."""
+        if not (g := self._write_guard()):
+            return
+        cfg, data = g
+        name, on = str(data.get("name", "")), bool(data.get("hidden"))
+        if name not in all_stems() or is_system(cfg, name):
+            return self._json(404, {"error": t(cfg, "err_file_missing")})
+        with _lock:
+            text = CFG_FILE.read_text(encoding="utf-8")
+            try:
+                cur = tomllib.loads(text).get("tabs", {}).get("hidden", [])
+                cur = [x for x in cur if isinstance(x, str)] if isinstance(cur, list) else []
+                want = [x for x in cur if x != name] + ([name] if on else [])
+                new = set_toml_value(text, "tabs", "hidden", json.dumps(want, ensure_ascii=False))
+                if tomllib.loads(new).get("tabs", {}).get("hidden") != want:
+                    raise ValueError
+            except (tomllib.TOMLDecodeError, ValueError):
+                return self._json(500, {"error": t(cfg, "err_config_edit")})
+            if new != text:
+                write_atomic(CFG_FILE, new)
+        log.info("tab %s %s", name, "hidden" if on else "shown")
+        self._json(200, {"ok": True, "hidden": on})
+
     def _api_lang(self):
         if not (g := self._write_guard()):
             return
@@ -4633,7 +5532,7 @@ class Handler(BaseHTTPRequestHandler):
         self._json(200, {"ok": True})
 
     def _api_block(self):
-        """POST /api/block {file, i, orig, text}: replaces the body of the i-th `##*` block."""
+        """POST /api/block {file, i, orig, text}: replaces the body of the i-th `##*` card."""
         if not (g := self._write_guard(demo_ok=True)):
             return
         cfg, data = g
@@ -4984,6 +5883,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._api_theme()
         if path == "/api/lang":
             return self._api_lang()
+        if path == "/api/examples-tab":
+            return self._api_examples_tab()
+        if path == "/api/tab-hidden":
+            return self._api_tab_hidden()
         if path == "/api/note":
             return self._api_note()
         if path == "/api/block":
@@ -5074,4 +5977,4 @@ if __name__ == "__main__":
     log.info("content: %s, pages: %s, port %d, editor password: %s",
              CONTENT, PAGES, PORT, "n/a (read-only)" if READONLY
              else "yes" if EDITOR_PASSWORD else "NO (H6082_EDITOR_PASSWORD is not set)")
-    ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
+    ThreadingHTTPServer((BIND, PORT), Handler).serve_forever()

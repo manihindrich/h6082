@@ -1,18 +1,23 @@
-#__ h6082
+# h6082
 ![h6082: markdown homepage](/media/h6082-hero.cs.svg)
 
-#++
+---
+#50%
 ## h6082 **markdown homepage ušitá na míru**
 **Startovní stránka, která se píše jako poznámky.**
 Každá záložka je jeden soubor `content/pages/*.md`. Upravíš ho ve svém editoru, nebo rovnou tady v prohlížeči s živým náhledem. Uložíš a je to venku, žádné nasazování.
 
-`#` založí sloupec, `##` blok a dovnitř patří odkazy, úkoly, poznámky, stav služeb nebo RSS. Funkcí postupně přibývá.
+`#` založí sloupec, `##` kartu a do ní patří odkazy, úkoly, poznámky, stav služeb nebo RSS. Funkcí postupně přibývá.
 /
 
 **Bez databáze, bez buildu, bez sledování.**
 Vzhled se ladí v jednom přehledném TOML souboru. Celé to běží v jediném úsporném kontejneru, takže nároky na hardware jsou skromné. Stačí i ta pověstná brambora. Prohlížeč nic nestahuje z cizích serverů, tvá data zůstávají u tebe.
 
-#
+#25%
+## Dokumentace a konfigurace {.fill}
+{{files system}}
+
+#25%
 ## Autor a aplikace {.fill}
 <div class="author" markdown="1">
 <div class="author-avatar"><img src="/static/img/author.webp" width="52" height="52" alt="" decoding="async"></div>
@@ -30,9 +35,9 @@ Vzhled se ladí v jednom přehledném TOML souboru. Celé to běží v jediném 
 | verze | **1.0** |
 | licence | [GPL-3.0](https://code.nolog.cz/hindrich/h6082/src/branch/master/LICENSE) · třetí strany [?](JetBrains Mono — OFL-1.1\nPython-Markdown — BSD-3-Clause\nPyMdown Extensions — MIT\nPygments — BSD-2-Clause\ndefusedxml — PSF-2.0) |
 
-#__
-/
-#--
+---
+//
+#-
 #+
 ## Soubory
 {{files user}}
@@ -40,33 +45,18 @@ Vzhled se ladí v jednom přehledném TOML souboru. Celé to běží v jediném 
 ### Nový soubor
 {{newfile}}
 
-#
-## Dokumentace a konfigurace
-{{files system}}
-
-/
-## ⚡ Rychlé tipy
-| zápis | co udělá |
-|:--|:--|
-| `##*` | blok upravíš přímo na stránce ✎ |
-| `#+` `#-` | širší / užší sloupec |
-| `#__` | pás přes celou šířku |
-| `/` | prázdný řádek |
-| `- [ ] úkol` | úkol, odškrtneš ho přímo na stránce |
-| `[?](text)` | ikona s nápovědou |
-
-V editoru ++ctrl+s++ uloží, ++ctrl+b++ ztuční. Všechno ostatní ukazuje [ukázka markdownu](/markdown).
 
 #
-## 📊 Server
-{{sys cpu mem load disk uptime demo}}
-
-<small>Ukázka s vymyšlenými hodnotami. Skutečný stav: `[system] enabled = true` a blok bez `demo`.</small>
-
-/
 ## 🕓 Poslední změny
 {{history 5 demo}}
 
 <small>Ukázka. Všechny verze souboru najdeš v editoru pod **historie**, s diffem a obnovením.</small>
 
-#--
+
+#
+## 📊 Server
+{{sys cpu mem load disk uptime demo}}
+
+<small>Ukázka s vymyšlenými hodnotami. Skutečný stav: `[system] enabled = true` a karta bez `demo`.</small>
+
+#-

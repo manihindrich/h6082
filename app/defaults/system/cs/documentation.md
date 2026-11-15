@@ -1,31 +1,58 @@
-#__ Dokumentace
+# Dokumentace
 ## 📘 Dokumentace
-Konfigurace, provoz a bezpečnost h6082. Nastavuje se v `config.toml` (**konfigurace** v bloku [Dokumentace a konfigurace](/h6082)) a v `.env`. Markdown a jeho prvky ukazuje [ukázka markdownu](/markdown).
+Konfigurace, provoz a bezpečnost h6082. Nastavuje se v `config.toml` (**konfigurace** v kartě [Dokumentace a konfigurace](/settings)) a v `.env`. Markdown a jeho prvky ukazuje [ukázka markdownu](/markdown).
 /
 
 [Začínáme](#funkce) · [Jak to funguje](#jak-to-funguje) · [Provoz](#aktualizace) · [Bezpečnost](#ochrana) · [Editor](#editor) · [Konfigurace](#format-configu) · [Vzhled](#cfg-layout) · [Endpointy](#stranky-a-soubory)
 {: .center .big }
 
-#__ Začínáme
-## `Začínáme`
+---
+/
+# Začínáme
+##. `Začínáme`
 
+---
 #
 ## Funkce
 ### Obsah
-- záložky jako md soubory, sloupce různé šířky a bloky
+- záložky jako md soubory, sloupce různé šířky a karty
 - plný markdown: tabulky, callouty, úkoly, kód s kopírováním
 - vlastní obrázky ze složky `content/media/`
 - webový editor s obarvením, zkratkami a automatickým ukládáním
-- bloky `##*`, poznámky a úkoly upravitelné přímo na stránce
+- karty `##*`, poznámky a úkoly upravitelné přímo na stránce
 - historie verzí s diffem a obnovením
 ### Živé prvky
 - okamžité obnovení po uložení
 - stav služeb (HTTP, TCP) přímo u odkazů
-- RSS a stav serveru jako bloky
+- RSS a stav serveru jako karty
 ### Vzhled
 - 12 motivů a režim auto podle systému
 - rozhraní a dokumentace v angličtině a češtině
 - rozložení, písmo, barvy a typografie v `config.toml`
+
+## Požadavky
+| | odhad |
+|:--|:--|
+| procesor | cokoli, i Raspberry Pi; v klidu ~0 % |
+| paměť | ~60 MB, horní mez 256 MB (limit v compose) |
+| disk | ~80 MB image + tvůj obsah (jednotky MB) |
+| systém | Linux, macOS i Windows s Dockerem a Compose |
+| síť | jen pro RSS a stav služeb |
+
+**Obtížnost: snadná** ★☆☆☆☆, instalace zabere asi 5 minut: zkopírovat `.env`, doplnit heslo a jeden příkaz. Vše další se dělá v prohlížeči.
+
+##- Závislosti
+| komponenta | verze |
+|---|---|
+| Docker + Compose | v2 |
+| Python (alpine) | 3.12 |
+| Markdown | 3.7 |
+| pymdown-extensions | 10.12 |
+| Pygments | 2.18.0 |
+| defusedxml | 0.7.1 |
+| JetBrains Mono | 2.304 |
+
+Build potřebuje internet (PyPI, GitHub). Za běhu jdou ven jen kontroly služeb a RSS, a to jen na adresy uvedené v md souborech.
 
 #
 ## Instalace
@@ -52,7 +79,6 @@ Po změně `.env` spusť `docker compose up -d`. Zpřístupnění do sítě popi
 
 `extra_hosts: host.docker.internal:host-gateway` umožní kontrolovat služby běžící přímo na hostiteli. Služba ale musí poslouchat i na docker bridge, ne jen na `127.0.0.1`.
 
-#
 ## Spuštění a údržba
 ```bash
 # build + start
@@ -71,15 +97,18 @@ docker compose down --rmi local
 docker image prune -f
 ```
 Kontejner má `restart: unless-stopped`, takže se po restartu Dockeru spustí znovu.
-Obsah a config se projeví hned po uložení, bez restartu. Co aktualizace změní a co ne, popisuje blok Aktualizace.
+Obsah a config se projeví hned po uložení, bez restartu. Co aktualizace změní a co ne, popisuje karta Aktualizace.
 
-#__ Jak to funguje
-## `Jak to funguje`
+---
+/
+# Jak to funguje
+##. `Jak to funguje`
 
-#
+---
+#-
 ## Jak to funguje
 1. server načte `pages/<záložka>.md` (nebo překlad podle jazyka)
-2. rozdělí text na sloupce a bloky
+2. rozdělí text na sloupce a karty
 3. vykreslí markdown a výsledek uloží do cache
 4. při změně souboru pošle otevřeným stránkám zprávu (SSE)
 
@@ -115,7 +144,7 @@ content/             jen tvoje data — aktualizace na ně nikdy nesáhne
 - `docker-compose.yml`: kontejner a jeho zpřísnění
 - `.env`: lokální nastavení a heslo editoru, vzor je `.env.example`. Je v `.gitignore`.
 - `config.toml`: konfigurace (tato záložka)
-- `app/defaults/`: co přichází s aplikací — vestavěné stránky h6082, markdown a dokumentace v každém jazyce, demo záložky, jejich obrázky a výchozí `config.toml`
+- `app/defaults/`: co přichází s aplikací — vestavěné stránky nastavení, markdown, dokumentace a ukázky v každém jazyce, demo záložky, jejich obrázky a výchozí `config.toml`
 - `pages/*.md`: tvoje záložky, k nim volitelné překlady `jmeno.cs.md` a `jmeno.en.md` (viz Jazyky)
 - `system/<jazyk>/`: tvoje vlastní kopie vestavěných stránek, vzniknou uložením v editoru
 - `server.py`: generátor, HTTP server, API (editor, kontroly, RSS)
@@ -126,23 +155,13 @@ content/             jen tvoje data — aktualizace na ně nikdy nesáhne
 
 Složka `content/` je do kontejneru připojená pro zápis, aby do ní mohl ukládat webový editor. Kontejner běží pod UID:GID z `.env`, takže soubory zůstávají tvoje. Změny `app/` vyžadují rebuild.
 
-#
-## Závislosti
-| komponenta | verze |
-|---|---|
-| Docker + Compose | v2 |
-| Python (alpine) | 3.12 |
-| Markdown | 3.7 |
-| pymdown-extensions | 10.12 |
-| Pygments | 2.18.0 |
-| defusedxml | 0.7.1 |
-| JetBrains Mono | 2.304 |
 
-Build potřebuje internet (PyPI, GitHub). Za běhu jdou ven jen kontroly služeb a RSS, a to jen na adresy uvedené v md souborech.
+---
+/
+# Provoz
+##. `Provoz`
 
-#__ Provoz
-## `Provoz`
-
+---
 #
 ## Aktualizace
 Aktualizace vymění jen aplikaci (image). **Tvoje data v `content/` a `.env` zůstanou beze změny**:
@@ -151,7 +170,7 @@ Aktualizace vymění jen aplikaci (image). **Tvoje data v `content/` a `.env` z�
 |---|---|
 | tvoje záložky, poznámky, úkoly | beze změny |
 | `content/config.toml` | beze změny; nové volby mají výchozí hodnotu, dokud je nenastavíš |
-| vestavěné stránky (h6082, markdown, dokumentace) | nová verze z image |
+| vestavěné stránky (nastavení, markdown, dokumentace, ukázky) | nová verze z image |
 | tvoje upravená vestavěná stránka | zůstane tvoje; *vrátit výchozí* v editoru vrátí novou výchozí |
 | demo záložky | zkopírují se jen při úplně prvním startu (značka `content/.seeded`), nikdy znovu |
 
@@ -175,33 +194,41 @@ Spouštěj ho se systémem souborů jen pro čtení a bez volume (viz `h6082-dep
 
 **Demo mód** (`H6082_DEMO=1`) je režim jen pro čtení, ve kterém si návštěvník aplikaci může vyzkoušet:
 
-- upravuje stránky v editoru, odškrtává a přidává úkoly, píše do poznámek a mění bloky `##*`
+- upravuje stránky v editoru, odškrtává a přidává úkoly, píše do poznámek a mění karty `##*`
 - změny se ukládají jen v jeho prohlížeči (`localStorage`) a vydrží, dokud nezmáčkne *obnovit demo*; server nic nezapíše
 - stránku s jeho změnami vykreslí server přes `/api/render`, nic si přitom neukládá; RSS a kontroly stavu z textu návštěvníka se nespouštějí
 - nic není skryté: zakládání, přejmenování a mazání souborů, přidání překladu, úprava configu a historie zůstanou vidět ztlumené, nic nedělají a po najetí myší, zaměření nebo klepnutí ukážou „V demu to nejde vyzkoušet“
 
 #
 ## Ukázková data
-Místo skutečných údajů ukážou **vymyšlená data**. Hodí se do ukázek, dokumentace a na veřejné stránky, protože neprozradí nic o serveru ani názvy tvých souborů. Nemá to nic společného s demo módem `H6082_DEMO` (viz Režim jen pro čtení), funguje to v každém režimu.
+Místo skutečných údajů ukážou **vymyšlená data**. Hodí se do ukázek, dokumentace a na veřejné stránky, protože neprozradí nic o serveru ani názvy tvých souborů a nepotřebují internet. Nemá to nic společného s demo módem `H6082_DEMO` (viz Režim jen pro čtení), funguje to v každém režimu.
 
 | prvek | ukázková data | skutečná data |
 |---|---|---|
+| stav služeb | `{.check .demo}`: zelená, `.warn` oranžová (401), `.down` červená (timeout), `ms=24` odezva | `{.check}` |
+| RSS | `{{rss URL 5 demo}}`: vymyšlené titulky podle adresy feedu | `{{rss URL 5}}` |
 | server | `{{sys demo}}` | `{{sys}}` + `[system] enabled = true` |
 | historie | `{{history 5 demo}}` | `{{history 5}}` |
-| cokoli v `{{livedemo}}` | vždy | nejde |
 
-- `{{sys demo}}` a `{{history … demo}}` vzniknou přímo v prohlížeči, server se na nic neptá. Fungují i tam, kde jsou skutečná data vypnutá (režim jen pro čtení, demo mód).
-- **v `{{livedemo}}`** je všechno připravené předem a server ani prohlížeč nic nestahují:
-  - tečky stavu `{.check}` jsou zelené, `{.check .warn}` oranžová, `{.check .down}` červená, nápověda ukáže vymyšlenou odezvu
-  - `{{rss URL}}` ukáže vzorové články podle adresy (zprávy, recepty, design, časopisy, bezpečnost, jinak obecné)
-  - `{{sys}}` a `{{history}}` jsou vždy s ukázkovými daty
-  - úkoly, poznámky a bloky `##*` mění jen animace, kliknutím nejdou upravit a nepočítají se mezi úkoly stránky
+- nic z toho se neptá serveru ani nestahuje; funguje i tam, kde jsou skutečná data vypnutá (režim jen pro čtení, demo mód)
+- odezva u `{.check .demo}` bez `ms=` je pro stejnou adresu pořád stejná
+- v animovaných ukázkách ([ukázky](/examples) a malé ukázky v [markdownu](/markdown)) jsou živé prvky vždy vymyšlené, `demo` psát netřeba; úkoly, poznámky a karty `##*` tam mění jen animace
 
-Ukázka markdownu i demo záložky používají ukázková data. Výjimkou jsou stav služeb a RSS na demo záložkách mimo `{{livedemo}}`: ty jsou skutečné. Veřejné weby a feedy ukážou opravdový stav, ukázkové adresy z domácí sítě (`192.168.1.x` v demu rodiny) budou na serveru mimo tvou síť nedostupné.
+```md
+- [Nextcloud](https://nextcloud.com){.check .demo ms=18}
+- [Pi-hole](https://pi-hole.net){.check .demo .warn}
+{{rss https://news.ycombinator.com/rss 5 demo}}
+{{sys cpu mem disk demo}}
+{{history 3 demo}}
+```
+Demo záložka používá jen ukázková data.
 
-#__ Bezpečnost
-## `Bezpečnost`
+---
+/
+# Bezpečnost
+##. `Bezpečnost`
 
+---
 #
 ## 🛡️ Ochrana
 - poslouchá jen na `127.0.0.1`
@@ -214,8 +241,15 @@ Ukázka markdownu i demo záložky používají ukázková data. Výjimkou jsou 
 - obrázky se posílají s CSP `sandbox`, takže skript v SVG se nespustí
 - fonty se při buildu ověřují přes SHA-256
 
-## 🚫 Záměrně vynecháno
-Procesy hostitele, docker kontejnery a síť. Vyžadovaly by oslabit izolaci kontejneru.
+## 🔒 Zápis a síť
+- API vyžaduje hlavičku `X-H6082`. Cizí web v prohlížeči ji bez CORS poslat nemůže, takže jiné stránky nemůžou soubory měnit.
+- zápis je atomický přes dočasný soubor a přejmenování, soubor nikdy nezůstane napůl zapsaný
+- kontrola souběhu: změnu provedenou jinde editor nepřepíše
+- limit velikosti `max_size_kb`
+- systémové soubory (`settings`, `markdown`, `documentation`, `examples`, `config.toml`) nejdou smazat, jen tvoji kopii vestavěné stránky jde vrátit na výchozí; mazání je jen přesun do `content/.trash/`
+- `/api/check` a `/api/rss` pracují jen s cíli a feedy, které jsou napsané v md souborech, takže server nejde zneužít ke skenování sítě
+- RSS se parsuje přes `defusedxml` (ochrana proti XML bombám a externím entitám). Do stránky se dostanou jen `http(s)` odkazy, vložené jako text, ne jako HTML.
+- kontroly a RSS následují přesměrování jen na `http(s)` a nejvýš 3×
 
 #
 ## ⚠️ Doporučení
@@ -223,11 +257,14 @@ Procesy hostitele, docker kontejnery a síť. Vyžadovaly by oslabit izolaci kon
 - `.env` obsahuje heslo a do repozitáře nepatří (je v `.gitignore`)
 - do sítě pouštěj stránku jen přes reverzní proxy s HTTPS a jméno serveru doplň do `[api] allowed_hosts`
 - e-mail piš přes `{{email jméno doména}}`, roboti ho pak nepřečtou
-- **skryté záložky nejsou soukromé.** Jsou dostupné přes `/<jméno>` a jejich seznam je vidět na stránce h6082.
+- **skryté záložky nejsou soukromé.** Jsou dostupné přes `/<jméno>` a jejich seznam je vidět na stránce [nastavení](/settings).
 - **heslo chrání jen zápis, číst může každý, kdo se ke stránce dostane.** Na veřejném serveru dej celý web za přihlášení v reverzní proxy.
 - stav serveru (`/api/sys`) je vypnutý (`[system] enabled`). Ukázky používají `{{sys demo}}` s vymyšlenými daty. Zapni ho jen tam, kde údaje o serveru nevadí.
 - v ukázkách používej `{{history demo}}`, skutečná historie ukazuje názvy souborů a časy úprav
 - historie uchovává i smazaný text. Když do souboru omylem vložíš tajný údaj, smaž v editoru přes **historie** i historii souboru.
+
+## 🚫 Záměrně vynecháno
+Procesy hostitele, docker kontejnery a síť. Vyžadovaly by oslabit izolaci kontejneru.
 
 #
 ## 🔧 Technické detaily
@@ -242,32 +279,27 @@ Procesy hostitele, docker kontejnery a síť. Vyžadovaly by oslabit izolaci kon
 - **Zápis**: editor smí jen do `content/config.toml`, `content/pages/*.md` a `content/system/<jazyk>/*.md`
 - **Původ požadavků**: API přijme jen `Origin` z `[api] allowed_hosts`
 
-## 🔒 Zápis a síť
-- API vyžaduje hlavičku `X-H6082`. Cizí web v prohlížeči ji bez CORS poslat nemůže, takže jiné stránky nemůžou soubory měnit.
-- zápis je atomický přes dočasný soubor a přejmenování, soubor nikdy nezůstane napůl zapsaný
-- kontrola souběhu: změnu provedenou jinde editor nepřepíše
-- limit velikosti `max_size_kb`
-- systémové soubory (`h6082`, `markdown`, `docs`, `config.toml`) nejdou smazat, jen tvoji kopii vestavěné stránky jde vrátit na výchozí; mazání je jen přesun do `content/.trash/`
-- `/api/check` a `/api/rss` pracují jen s cíli a feedy, které jsou napsané v md souborech, takže server nejde zneužít ke skenování sítě
-- RSS se parsuje přes `defusedxml` (ochrana proti XML bombám a externím entitám). Do stránky se dostanou jen `http(s)` odkazy, vložené jako text, ne jako HTML.
-- kontroly a RSS následují přesměrování jen na `http(s)` a nejvýš 3×
+---
+/
+# Editor a obsah
+##. `Editor a obsah`
 
-#__ Editor a obsah
-## `Editor a obsah`
-
+---
 #+
 ## Editor
 Ukládá se samo po chvíli bez psaní, ++ctrl+s++ uloží hned. Vpravo je živý náhled.
 
 - **hranice editor | náhled**: táhni myší; dvojklik ji vrátí doprostřed, na zaměřené hranici fungují ++arrow-left++ ++arrow-right++. Šířka se pamatuje v prohlížeči.
 - **náhled** (tlačítko vedle *zobrazit*) nebo ++alt+p++: skryje / ukáže náhled
-- **přejmenovat / smazat** vedle názvu souboru: přejmenování vezme i překlady, historii a odkazy v `config.toml`; smazání přesune soubor do `content/.trash/`. U upravené systémové stránky je tu *vrátit výchozí*.
+- **skrýt z lišty** (ikona oka vedle názvu souboru): přeškrtnuté oko = záložka není v liště, otevřeš ji jen z nastavení nebo přes `/<jméno>`; zapíše se do `[tabs] hidden`
+- **přejmenovat / smazat** (ikony tužky a koše vedle názvu souboru): přejmenování vezme i překlady, historii a odkazy v `config.toml`; smazání přesune soubor do `content/.trash/`. U upravené systémové stránky je tu *vrátit výchozí*.
+- **čísla řádků**: ikona v liště (vedle *náhled*) je zobrazí / skryje; volba se pamatuje v prohlížeči
 - **párování**: `` ( [ { < " ' ` `` se zavírají samy, napsání zavírací závorky ji jen přeskočí, ++backspace++ smaže prázdný pár
 - **seznamy a citace**: ++enter++ pokračuje v `-`, `1.`, `- [ ]` a `>`; ++enter++ na prázdné položce seznam ukončí. ```` ```jazyk ```` + ++enter++ uzavře blok kódu.
 - **odsazení**: ++tab++ / ++shift+tab++ odsadí položku seznamu nebo všechny vybrané řádky
 - **označený text**: napsání `*` ho obalí kurzívou, další `*` udělá tučné; `_` kurzíva, `~` ~~přeškrtnutí~~, `=` ==zvýraznění==, `` ` `` kód (víc řádků → blok ```` ``` ````). Mezery na okrajích výběru zůstanou vně, u více řádků se obalí každý zvlášť a značky seznamu zůstanou na místě.
 - **vložení URL** přes označený text vytvoří odkaz `[text](url)`
-- **našeptávání**: po `#` na začátku řádku, `{{`, `> [!`, `{.`, `](/` nebo `- [` nabídne syntaxi; ++enter++ / ++tab++ potvrdí, ++esc++ zavře. Viz [ukázka markdownu](/markdown#naseptavani-v-editoru).
+- **našeptávání**: po `#` na začátku řádku, `{{`, `> [!`, `{.`, `](/` nebo `- [` nabídne syntaxi (sloupce, karty `##.` `##-` `##+`, shortcody včetně `{{countdown}}`, třídy …); ++enter++ / ++tab++ potvrdí, ++esc++ zavře. Viz [Našeptávání v editoru](#naseptavani-v-editoru).
 - soubor změněný jinde (vim, git) nepřepíše, nabídne *načíst ze souboru* nebo *přepsat*
 - chybný TOML uloží, ale dál platí poslední platný config
 - **historie** ukáže verze souboru, diff a obnovení
@@ -288,6 +320,30 @@ Ukládá se samo po chvíli bez psaní, ++ctrl+s++ uloží hned. Vpravo je živ�
 
 Zkratky formátování přepínají: druhé stisknutí formát zase odebere. Bez výběru platí pro slovo pod kurzorem, mimo slovo vloží prázdný pár. Na Macu místo ++ctrl++ funguje ++cmd++. Formátování a zkratky platí jen pro `.md` soubory, ne pro `config.toml`.
 
+#+
+## Našeptávání v editoru
+{{livedemo 8}}
+{{scene napoveda.md}}
+##* Termíny
+**1. 3.** pojištění
+> [!tip] Tip
+> Editor napoví i shortcody.
+{{rss https://news.ycombinator.com/rss 3}}
+{{/livedemo}}
+
+```md
+#        → sloupce a karty: #+ #- #1.2 #60px ## ##* ##. ##- …
+{{       → shortcody: {{rss URL 5}}, {{note}} …
+> [!     → callouty: tip, warning, danger … i sbalené
+{.       → třídy: .check .center .big .fill .mobile …
+](/      → názvy tvých stránek
+- [      → úkol
+```
+- nabídka se ukáže jen po těchto začátcích, ne u každého slova
+- ++arrow-up++ ++arrow-down++ vybírá, ++enter++ nebo ++tab++ potvrdí, ++esc++ zavře; bez nabídky ++enter++ funguje jako obvykle
+- u shortcodu se po potvrzení označí parametr (`URL`), stačí ho přepsat
+- funguje v editoru i při úpravě karty `##*` na stránce, ne na dotykových zařízeních; vypnutí: `[editor] suggest = false`
+
 #
 ## [editor]
 `enabled` · `true`
@@ -300,20 +356,20 @@ Zkratky formátování přepínají: druhé stisknutí formát zase odebere. Bez
 : max. velikost ukládaného souboru
 
 `suggest` · `true`
-: našeptávání markdownu a shortcodů při psaní (editor i bloky `##*`, ne na dotykových zařízeních)
+: našeptávání markdownu a shortcodů při psaní (editor i karty `##*`, ne na dotykových zařízeních)
 
-Při konfliktu editor nabídne *načíst ze souboru* nebo *přepsat*. Ovládání je v bloku Editor.
+Při konfliktu editor nabídne *načíst ze souboru* nebo *přepsat*. Ovládání je v kartě Editor.
 
 ## Jazyky
-Rozhraní a vestavěné stránky (h6082, markdown, dokumentace) jsou v angličtině a češtině. Jazyk se volí v rozbalovací nabídce v horní liště stránky h6082, nebo v `[page] lang`. Volba se uloží do `config.toml` a platí všude.
+Rozhraní a vestavěné stránky (nastavení, markdown, dokumentace) jsou v angličtině a češtině. Jazyk se volí v rozbalovací nabídce v horní liště stránky nastavení, nebo v `[page] lang`. Volba se uloží do `config.toml` a platí všude.
 
 **Překlady vlastních záložek:** vedle `jmeno.md` ulož `jmeno.cs.md` (nebo `jmeno.en.md`). Záložka pak ukáže verzi podle zvoleného jazyka, a když překlad chybí, ukáže `jmeno.md`. V liště je jen jednou. Smazání záložky smaže i její překlady.
 
 | soubor | kdy se zobrazí |
 |---|---|
-| `demo-cafe.md` | výchozí verze (tady anglicky) |
-| `demo-cafe.cs.md` | při `lang = "cs"` |
-| `demo-cafe.en.md` | při `lang = "en"`, volitelné místo výchozí verze |
+| `recepty.md` | výchozí verze |
+| `recepty.cs.md` | při `lang = "cs"` |
+| `recepty.en.md` | při `lang = "en"`, volitelné místo výchozí verze |
 
 Náhled jiného jazyka bez uložení: `/<jméno>?lang=cs`.
 
@@ -324,13 +380,16 @@ Náhled jiného jazyka bez uložení: `/<jméno>?lang=cs`.
 - **nadpis**: `[page] header`
 - **záložky**: uživatelské `.md` zleva, pořadí podle `[tabs] order`
 - **skrytá**: zobrazí se jen při prohlížení skryté záložky (čárkovaný rámeček)
-- **jazyk, motiv**: rozbalovací nabídky, jen na stránce h6082
-- **⚙**: stránka h6082 (`[page] about_tab`): přehled, soubory, nastavení
+- **jazyk, motiv**: rozbalovací nabídky, jen na stránce nastavení
+- **⚙**: stránka nastavení (`/settings`, `[page] about_tab`): přehled, soubory, nastavení
 - **●**: živé obnovení, zelená = připojeno
 
-#__ Konfigurace
-## `Konfigurace`
+---
+/
+# Konfigurace
+##. `Konfigurace`
 
+---
 #
 ## Formát configu
 Soubor `content/config.toml` je ve formátu TOML. Hodnoty s jednotkou jsou CSS hodnoty a píšou se jako řetězec, např. `"12px"` nebo `"1.2em"`. Barvy jsou v libovolném CSS formátu: `#rrggbb`, `rgb()`, `hsl()` nebo název.
@@ -350,7 +409,7 @@ Chybějící klíč má výchozí hodnotu.
 : ikona záložky prohlížeče: `""` = vestavěný fialový diamant, jinak jeden znak nebo emoji (`"🚀"`)
 
 `lang` · `"en"`
-: jazyk rozhraní a vestavěných stránek: `en` nebo `cs`. Přepíná se i rozbalovací nabídkou v horní liště stránky h6082 (nebo shortcodem `{{lang}}`), volba se zapíše sem.
+: jazyk rozhraní a vestavěných stránek: `en` nebo `cs`. Přepíná se i rozbalovací nabídkou v horní liště stránky nastavení (nebo shortcodem `{{lang}}`), volba se zapíše sem.
 
 `links_new_tab` · `true`
 : externí odkazy (`http`/`https`) se otevírají v novém tabu
@@ -361,27 +420,23 @@ Chybějící klíč má výchozí hodnotu.
 `live_reload` · `true`
 : stránka se po uložení `.md` nebo configu sama obnoví. Zelená tečka vpravo nahoře znamená aktivní spojení.
 
-`about_tab` · `"h6082"`
-: záložka zobrazená vpravo nahoře (výchozí je vestavěná stránka h6082). Do levé lišty se nezařadí. Bez uživatelských záložek je na `/`. `""` = žádná.
+`about_tab` · `"settings"`
+: záložka zobrazená vpravo nahoře (výchozí je vestavěná stránka nastavení; dřívější `"h6082"` funguje dál). Do levé lišty se nezařadí. Bez uživatelských záložek je na `/`. `""` = žádná.
 
-## [tabs]
-`order` · `[]`
-: pořadí uživatelských záložek zleva podle jména souboru. První je úvodní `/`. Soubory, které v seznamu nejsou, následují abecedně.
+## [history]
+`enabled` · `true`
+: historie změn všech `.md` a `config.toml`. `{{history … demo}}` (vymyšlené změny) funguje i vypnuté.
 
-`labels` · `{}`
-: popisky, např. `{ docs = "nápověda" }`. Výchozí popisek je jméno souboru. Popisek jde zadat i pro každý jazyk zvlášť: `{ demo-cafe = { en = "café", cs = "kavárna" } }`.
+`coalesce_min` · `5`
+: úpravy do tolika minut od poslední verze se slučují do jedné, takže autosave nevytváří stovky verzí
 
-`hidden` · `[]`
-: záložky skryté z lišty, dál dostupné přes `/<jméno>` a ze seznamu souborů na h6082. Vestavěné stránky (markdown, dokumentace) v liště nejsou nikdy, skrývat je netřeba.
+`max_versions` · `50`
+: max. počet verzí na soubor
 
-`show_single` · `false`
-: zobrazit lištu, i když existuje jen jedna uživatelská záložka
-```toml
-[tabs]
-order  = ["dev", "infra", "notes"]
-labels = { docs = "nápověda", dev = { en = "dev", cs = "vývoj" } }
-hidden = ["drafts"]
-```
+`max_age_days` · `90`
+: starší verze se mažou. 3 nejnovější zůstávají vždy.
+
+Verze je **stav souboru před změnou**. Zachytí se úpravy z editoru i odjinud (vim, git): server kontroluje soubory každé 2 s. Před obnovením se současný stav uloží jako nová verze, takže i obnovení jde vrátit. Obsah verzí, diff a obnovení jsou za heslem editoru. `{{history}}` na stránce ukazuje jen časy, názvy a počty řádků.
 
 #
 ## [api]
@@ -403,26 +458,33 @@ hidden = ["drafts"]
 
 ICMP ping v kontejneru nejde, protože kontejner běží bez root práv. Místo něj slouží `tcp://host:port`.
 
-## [history]
-`enabled` · `true`
-: historie změn všech `.md` a `config.toml`. `{{history … demo}}` (vymyšlené změny) funguje i vypnuté.
+## [tabs]
+`order` · `[]`
+: pořadí uživatelských záložek zleva podle jména souboru. První je úvodní `/`. Soubory, které v seznamu nejsou, následují abecedně.
 
-`coalesce_min` · `5`
-: úpravy do tolika minut od poslední verze se slučují do jedné, takže autosave nevytváří stovky verzí
+`labels` · `{}`
+: popisky, např. `{ demo = "ukázka" }`. Výchozí popisek je jméno souboru. Popisek jde zadat i pro každý jazyk zvlášť: `{ recepty = { en = "recipes", cs = "recepty" } }`.
 
-`max_versions` · `50`
-: max. počet verzí na soubor
+`hidden` · `[]`
+: záložky skryté z lišty, dál dostupné přes `/<jméno>` a ze seznamu souborů na stránce nastavení. Přepíná se i ikonou oka v editoru. Vestavěné stránky (markdown, dokumentace) v liště nejsou nikdy, skrývat je netřeba; výjimkou jsou ukázky, viz `examples`.
 
-`max_age_days` · `90`
-: starší verze se mažou. 3 nejnovější zůstávají vždy.
+`examples` · `true`
+: stránka ukázek (`/examples`) jako první záložka vlevo; jinam ji posuneš uvedením `"examples"` v `order`. Domovská stránka `/` zůstává první uživatelská záložka. Přepíná se i přepínačem v hlavičce [ukázky markdownu](/markdown) (s heslem editoru), volba se zapíše sem.
 
-Verze je **stav souboru před změnou**. Zachytí se úpravy z editoru i odjinud (vim, git): server kontroluje soubory každé 2 s. Před obnovením se současný stav uloží jako nová verze, takže i obnovení jde vrátit. Obsah verzí, diff a obnovení jsou za heslem editoru. Blok `{{history}}` ukazuje jen časy, názvy a počty řádků.
+`show_single` · `false`
+: zobrazit lištu, i když existuje jen jedna uživatelská záložka
+```toml
+[tabs]
+order  = ["dev", "infra", "notes"]
+labels = { demo = "ukázka", dev = { en = "dev", cs = "vývoj" } }
+hidden = ["drafts"]
+```
 
 ## [markdown]
 `line_breaks` · `true`
 : ++enter++ v textu = nový řádek, prázdný řádek = nový odstavec. `false` vrátí klasické chování markdownu (řádky se slévají).
 
-Řádek jen s `/` vloží prázdný řádek, `//` dva. Mimo blok (pod `#`, nad `##`) udělá mezeru mezi bloky. Řádek začínající `// text` je skrytá poznámka.
+Řádek jen s `/` vloží prázdný řádek, `//` dva. Mimo kartu (pod `#`, nad `##`) udělá mezeru mezi kartami. Řádek začínající `// text` je skrytá poznámka.
 
 #
 ## [system]
@@ -449,7 +511,7 @@ Hodnoty jsou z hostitele (`/proc`, `/sys` sdílí kontejner s jádrem). Síť, p
 
 ## [rss]
 `enabled` · `true`
-: bloky `{{rss URL [počet]}}`
+: výpisy `{{rss URL [počet]}}`
 
 `refresh_min` · `15`
 : doba v cache. Při chybě zdroje se ukáže poslední známý stav.
@@ -465,23 +527,26 @@ Hodnoty jsou z hostitele (`/proc`, `/sys` sdílí kontejner s jádrem). Síť, p
 : barevné schéma bloků kódu pro motiv **obsidian**, např. `monokai`, `dracula`, `one-dark`, `nord`, `gruvbox-dark`, `material`, `github-dark`, `solarized-dark`, `native`, `zenburn`. Ostatní motivy mají vlastní schéma. Neznámý název = `monokai` + varování v logu.
 
 `line_numbers` · `false`
-: čísla řádků ve všech blocích kódu
+: čísla řádků ve všech blocích kódu; při `false` je mají jen bloky s `linenums="1"`
 
 `wrap` · `true`
 : dlouhé řádky kódu se zalamují; `false` = vodorovný posuvník
 
 Pozadí bloků kódu je vždy `code_bg`, ze schématu se berou jen barvy tokenů.
 
-#__ Vzhled
-## `Vzhled`
+---
+/
+# Vzhled
+##. `Vzhled`
 
+---
 #
 ## [layout]
 `columns_fixed` · `0`
 : `0` = počet sloupců podle šířky okna, `N` = N běžných sloupců na řádek
 
 `column_min_width` · `"240px"`
-: min. šířka sloupce v automatickém režimu. Sloupce `#+` / `#++` jsou 1,5× / 2× širší, `#-` / `#--` poloviční / čtvrtinové. `#__` je pás přes celou šířku. Syntaxi ukazuje [ukázka markdownu](/markdown#sloupce).
+: min. šířka sloupce v automatickém režimu. Sloupce `#+` / `#++` jsou 1,5× / 1,75× širší, `#-` / `#--` poloviční / čtvrtinové, `#1.2` vlastní poměr; sloupec potřebuje aspoň svoje číslo × tuto šířku, jinak se řádek zalomí. `#120px` má pevnou šířku. Řádek `---` začne nový řádek sloupců (samotný `#` v něm je pás přes celou šířku). Syntaxi ukazuje [ukázka markdownu](/markdown#sloupce).
 
 `page_max_width` · `"1600px"`
 : max. šířka obsahu, `"none"` = celá šířka
@@ -492,14 +557,17 @@ Pozadí bloků kódu je vždy `code_bg`, ze schématu se berou jen barvy tokenů
 `gap` · `"12px"`
 : mezera mezi sloupci a pod lištou záložek
 
+`row_gap` · `""`
+: mezera mezi řádky sloupců (`---`); `""` = stejná jako `gap`
+
 `block_gap` · `"10px"`
-: svislá mezera mezi bloky ve sloupci
+: svislá mezera mezi kartami ve sloupci
 
 `block_padding` · `"6px 10px 8px"`
-: vnitřní okraj bloku (CSS padding: nahoře, vpravo/vlevo, dole)
+: vnitřní okraj karty (CSS padding: nahoře, vpravo/vlevo, dole)
 
 `radius` · `"6px"`
-: zaoblení rohů bloků a záložek
+: zaoblení rohů karet a záložek
 
 `h3_indent` · `"2px"`
 : odsazení nadpisu `###`
@@ -520,7 +588,7 @@ Na šířce do 640 px je vždy jeden sloupec.
 : řádkování
 
 `block_title_transform` · `"none"`
-: titulky bloků: `none`, `uppercase`, `lowercase`, `capitalize`
+: titulky karet: `none`, `uppercase`, `lowercase`, `capitalize`
 
 #
 ## [style]
@@ -537,40 +605,6 @@ Typografie obsahu, každý prvek má vlastní sekci: `[style.text]`, `[style.h2]
 - `em` je násobek velikosti písma: `1em` = výška písma, mezery tak rostou s `[font] size`
 - všechny klíče s výchozími hodnotami a komentáři jsou ve výchozím `config.toml`
 - změny se projeví hned po uložení
-
-#
-## Motivy
-Výběr je v rozbalovací nabídce v horní liště stránky h6082. Volba zapíše motiv do `config.toml` jako `[theme] default` (s heslem editoru), takže platí pro všechny prohlížeče. Ostatní řádky a komentáře v configu zůstanou beze změny.
-
-| motiv | typ | kód |
-|---|---|---|
-| `obsidian` | tmavý | `[code]` |
-| `nord` | tmavý | nord |
-| `dracula` | tmavý | dracula |
-| `gruvbox-dark` | tmavý | gruvbox-dark |
-| `solarized-dark` | tmavý | solarized-dark |
-| `catppuccin-mocha` | tmavý | one-dark |
-| `tokyo-night` | tmavý | one-dark |
-| `obsidian-light` | světlý | friendly |
-| `gruvbox-light` | světlý | gruvbox-light |
-| `solarized-light` | světlý | solarized-light |
-| `catppuccin-latte` | světlý | default |
-| `paper` | světlý | default |
-| `auto` | podle systému | — |
-
-`obsidian` = barvy z `[colors]` (výchozí). `auto` volí mezi `auto_dark` a `auto_light` podle nastavení systému a mění se i za běhu.
-
-Náhled bez uložení volby: `?theme=<motiv>`, např. [/docs?theme=paper](/docs?theme=paper).
-
-## [theme]
-`default` · `"obsidian"`
-: aktivní motiv (může být i `"auto"`). Nastavuje ho i výběr na stránce h6082.
-
-`auto_dark` · `"obsidian"`
-: motiv pro `auto` při tmavém systému
-
-`auto_light` · `"obsidian-light"`
-: motiv pro `auto` při světlém systému
 
 ## [themes.*]
 Vlastní motiv, nebo úprava vestavěného, když použiješ jeho jméno. Klíče jsou jako v `[colors]` plus:
@@ -599,16 +633,50 @@ accent = "#b48ead"
 ```
 
 #
+## Motivy
+Výběr je v rozbalovací nabídce v horní liště stránky nastavení. Volba zapíše motiv do `config.toml` jako `[theme] default` (s heslem editoru), takže platí pro všechny prohlížeče. Ostatní řádky a komentáře v configu zůstanou beze změny.
+
+| motiv | typ | kód |
+|---|---|---|
+| `obsidian` | tmavý | `[code]` |
+| `nord` | tmavý | nord |
+| `dracula` | tmavý | dracula |
+| `gruvbox-dark` | tmavý | gruvbox-dark |
+| `solarized-dark` | tmavý | solarized-dark |
+| `catppuccin-mocha` | tmavý | one-dark |
+| `tokyo-night` | tmavý | one-dark |
+| `obsidian-light` | světlý | friendly |
+| `gruvbox-light` | světlý | gruvbox-light |
+| `solarized-light` | světlý | solarized-light |
+| `catppuccin-latte` | světlý | default |
+| `paper` | světlý | default |
+| `auto` | podle systému | — |
+
+`obsidian` = barvy z `[colors]` (výchozí). `auto` volí mezi `auto_dark` a `auto_light` podle nastavení systému a mění se i za běhu.
+
+Náhled bez uložení volby: `?theme=<motiv>`, např. [/documentation?theme=paper](/documentation?theme=paper).
+
+## [theme]
+`default` · `"obsidian"`
+: aktivní motiv (může být i `"auto"`). Nastavuje ho i výběr na stránce nastavení.
+
+`auto_dark` · `"obsidian"`
+: motiv pro `auto` při tmavém systému
+
+`auto_light` · `"obsidian-light"`
+: motiv pro `auto` při světlém systému
+
+#
 ## [colors] základ
 | klíč | výchozí | použití |
 |---|---|---|
 | `bg` | `#1e1e1e` | pozadí stránky |
-| `panel` | `#262626` | bloky, aktivní záložka |
+| `panel` | `#262626` | karty, aktivní záložka |
 | `border` | `#363636` | okraje, tabulky, `---` |
 | `text` | `#dcddde` | text |
 | `muted` | `#999999` | odrážky, citace, neaktivní záložky |
 | `accent` | `#a882ff` | aktivní záložka, checkboxy, výběr |
-| `h2` | `#a882ff` | titulky bloků |
+| `h2` | `#a882ff` | titulky karet |
 | `h3` | `#c6b6ff` | `###`, hlavičky tabulek, termíny |
 | `link` | `#8a9cff` | odkazy |
 | `link_hover` | `#b5c0ff` | odkaz při najetí |
@@ -633,9 +701,12 @@ accent = "#b48ead"
 > [!tip] Světlé téma
 > Přepiš `bg`, `panel`, `border`, `text`, `muted` a `code_bg`. Pak uprav `h3`, `link` a `code_fg`, aby měly dost kontrastu.
 
-#__ Endpointy
-## `Endpointy`
+---
+/
+# Endpointy
+##. `Endpointy`
 
+---
 #
 ## Stránky a soubory
 `/`
@@ -691,7 +762,7 @@ accent = "#b48ead"
 ## Pravidla
 Pokud je nastavené heslo, vyžadují přihlášení `/edit/…`, `/api/file`, `/api/new` a `/api/rename`. Na jiný `Host` než z `[api] allowed_hosts` server odpoví chybou 421.
 
-Jméno záložky smí obsahovat jen `A-Z a-z 0-9 _ . -`. Soubor s jiným jménem se ignoruje. Názvy `static`, `events`, `healthz`, `edit`, `api`, `history` a `media` jsou rezervované, stejně jako jména vestavěných stránek `h6082`, `markdown` a `docs`.
+Jméno záložky smí obsahovat jen `A-Z a-z 0-9 _ . -`. Soubor s jiným jménem se ignoruje. Názvy `static`, `events`, `healthz`, `edit`, `api`, `history` a `media` jsou rezervované, stejně jako jména vestavěných stránek `settings`, `markdown`, `documentation` a `examples` a dřívější nebo české adresy `h6082`, `nastaveni` (přesměrují na `/settings`), `docs` a `dokumentace` (přesměrují na `/documentation`).
 
 #
 ## API pro zápis
@@ -714,7 +785,7 @@ Jméno záložky smí obsahovat jen `A-Z a-z 0-9 _ . -`. Soubor s jiným jménem
 : uložení poznámky `{{note}}` (POST, s heslem editoru)
 
 `/api/block`
-: uložení bloku `##*` upraveného přímo na stránce (POST `{file, i, orig, text}`, s heslem editoru)
+: uložení karty `##*` upravené přímo na stránce (POST `{file, i, orig, text}`, s heslem editoru)
 
 `/api/tasks`
 : zaškrtnutí, přidání a smazání úkolu (POST, s heslem editoru)
