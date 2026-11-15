@@ -13,12 +13,10 @@
 📄 novou záložku založíš v [nastavení](/settings)
 🎬 co všechno markdown umí, ukazují [ukázky](/examples)
 {: .muted }
-
-
+/
 ##.
 {{lang}} {{theme}}
-
-
+/
 ##.
 ### repozitář
 [code.nolog.cz/hindrich/h6082](https://code.nolog.cz/hindrich/h6082)

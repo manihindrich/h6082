@@ -13,12 +13,10 @@
 📄 create a new tab in [settings](/settings)
 🎬 everything markdown can do is in the [examples](/examples)
 {: .muted }
-
-
+/
 ##.
 {{lang}} {{theme}}
-
-
+/
 ##. 
 ### repository
 [code.nolog.cz/hindrich/h6082](https://code.nolog.cz/hindrich/h6082)
