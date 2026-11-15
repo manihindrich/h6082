@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/icon.svg" alt="h6082 icon: a purple diamond" width="96" height="96"></p>
+
 <h1 align="center">h6082 — self-hosted homepage</h1>
 
 <p align="center">
