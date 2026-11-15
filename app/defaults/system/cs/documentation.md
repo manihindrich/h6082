@@ -442,8 +442,8 @@ Chybějící klíč má výchozí hodnotu.
 : záložka zobrazená vpravo nahoře (výchozí je vestavěná stránka nastavení; dřívější `"h6082"` funguje dál). Do levé lišty se nezařadí. Bez uživatelských záložek je na `/`. `""` = žádná.
 
 ## [history]
-`enabled` · `true`
-: historie změn všech `.md` a `config.toml`. `{{history … demo}}` (vymyšlené změny) funguje i vypnuté.
+`enabled` · `false`
+: historie změn všech `.md` a `config.toml` (odkaz *historie* v editoru, diff a obnovení, `{{history}}`). Výchozí je vypnuto, zapni ji, pokud chceš verze souborů. `{{history … demo}}` (vymyšlené změny) funguje i vypnuté, `{{history … auto}}` ukazuje do zapnutí ukázková data.
 
 `coalesce_min` · `5`
 : úpravy do tolika minut od poslední verze se slučují do jedné, takže autosave nevytváří stovky verzí

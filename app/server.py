@@ -220,7 +220,7 @@ DEFAULTS = {
     },
     "themes": {},
     "history": {
-        "enabled": True,
+        "enabled": False,         # off by default; on = every save keeps a version (editor: history, diff, restore)
         "coalesce_min": 5,
         "max_versions": 50,
         "max_age_days": 90,
@@ -479,6 +479,8 @@ STRINGS = {
         "js_confirm_delete_file": "Delete {f}?\n\nThe file (and its translations) is moved to content/.trash/ and can be restored manually.",
         "js_server": "server: ",
         "js_unavailable": "unavailable",
+        "js_sys_cpu": "cores", "js_sys_procs": "processes", "js_sys_running": "{n} running", "js_sys_io": "disk I/O",
+        "js_sys_load_tip": "Load average over 1 · 5 · 15 min: processes running or waiting for the CPU. {n} cores, so {n}.00 = fully busy; the bar shows the last minute.",
         "js_history": "history: ",
         "js_no_changes": "no changes yet",
         "js_saved": "saved",
@@ -653,6 +655,8 @@ STRINGS = {
         "js_confirm_delete_file": "Smazat {f}?\n\nSoubor (i jeho překlady) se přesune do content/.trash/ — jde vrátit ručně.",
         "js_server": "server: ",
         "js_unavailable": "nedostupné",
+        "js_sys_cpu": "jádra", "js_sys_procs": "procesy", "js_sys_running": "{n} běží", "js_sys_io": "disk I/O",
+        "js_sys_load_tip": "Průměrná zátěž za 1 · 5 · 15 min: procesy, které běží nebo čekají na procesor. {n} jader, takže {n}.00 = plně vytížený; pruh ukazuje poslední minutu.",
         "js_history": "historie: ",
         "js_no_changes": "zatím žádné změny",
         "js_saved": "uloženo",
@@ -1424,7 +1428,7 @@ def rss_box(cfg, args):
             f'<small>{t(cfg, "loading_feed")}</small></div>')
 
 
-SYS_PARTS = ("cpu", "mem", "swap", "load", "temp", "uptime", "disk")
+SYS_PARTS = ("cpu", "cpuinfo", "mem", "swap", "load", "procs", "io", "temp", "uptime", "disk")
 
 
 def sys_box(cfg, args):
@@ -2155,7 +2159,9 @@ window.h6082 = (() => {
     cpu: {pct: 6 + Math.round(Math.random() * 12)},
     mem: {total: 8e9, used: 3.3e9 + Math.round(Math.random() * 3e8)},
     swap: {total: 2e9, used: 1.1e8},
-    load: [0.42, 0.37, 0.31].map((x) => x + Math.random() * 0.1),
+    load: [0.42, 0.37, 0.31].map((x) => x + Math.random() * 0.1), cores: 4, model: 'Intel Core i5-8500T',
+    procs: {running: 1 + Math.round(Math.random() * 2), total: 187 + Math.round(Math.random() * 6)},
+    io: {read: Math.round(Math.random() * 4e5), write: Math.round(2e5 + Math.random() * 1.2e6)},
     uptime: 1123200 + Math.round(performance.now() / 1000),
     temp: [{label: 'CPU', c: 44 + Math.round(Math.random() * 5)}],
     disk: [{label: '/', total: 120e9, used: 48.2e9, pct: 40.2}, {label: 'data', total: 2e12, used: 1.31e12, pct: 65.5}],
@@ -2170,14 +2176,21 @@ window.h6082 = (() => {
     if (!r || !r.ok) { real.forEach((b) => { b.textContent = T.server + ((r && r.j.error) || T.unavailable); }); return; }
     renderSys(real, r.j);
   }
+  const rate = (b) => b >= 1e6 ? (b / 1e6).toFixed(1) + ' MB/s' : b >= 1e3 ? (b / 1e3).toFixed(0) + ' kB/s' : b + ' B/s';
   function renderSys(boxes, d) {
     for (const box of boxes) {
       const rows = [];
       for (const part of box.dataset.sys.split(' ')) {
         if (part === 'cpu' && d.cpu.pct != null) rows.push(row('CPU', d.cpu.pct, d.cpu.pct.toFixed(0) + ' %'));
+        if (part === 'cpuinfo' && d.model !== undefined) rows.push(row(T.sys_cpu, null, (d.cores || 1) + ' × ' + (d.model || '?')));
+        if (part === 'procs' && d.procs) rows.push(row(T.sys_procs, null, d.procs.total + ' · ' + T.sys_running.replace('{n}', d.procs.running)));
+        if (part === 'io' && d.io) rows.push(row(T.sys_io, null, '↓ ' + rate(d.io.read) + ' · ↑ ' + rate(d.io.write)));
         if (part === 'mem' && d.mem.total) { const p = 100 * d.mem.used / d.mem.total; rows.push(row('RAM', p, gib(d.mem.used) + ' / ' + gib(d.mem.total))); }
         if (part === 'swap' && d.swap.total) { const p = 100 * d.swap.used / d.swap.total; rows.push(row('swap', p, gib(d.swap.used) + ' / ' + gib(d.swap.total))); }
-        if (part === 'load') rows.push(row('load', null, d.load.map((x) => x.toFixed(2)).join('  ')));
+        if (part === 'load') {   // load ÷ cores = how busy the CPU is over the last minute (1.0 per core = full)
+          const n = d.cores || 1, r = row('load', 100 * d.load[0] / n, d.load.map((x) => x.toFixed(2)).join(' · '));
+          r.title = T.sys_load_tip.replace('{n}', n); rows.push(r);
+        }
         if (part === 'temp') for (const t of d.temp) rows.push(row(t.label + ' °C', Math.min(100, t.c), t.c.toFixed(0) + ' °C'));
         if (part === 'uptime') rows.push(row('uptime', null, dur(d.uptime)));
         if (part === 'disk') for (const k of d.disk) rows.push(row(k.label, k.pct, gib(k.used) + ' / ' + gib(k.total)));
@@ -5186,7 +5199,7 @@ def get_feed(url, cfg):
 # Only safe sources: the host's /proc and /sys are visible in the container (stat, meminfo,
 # loadavg, uptime, thermal); disks via statvfs on empty directories mounted from the host.
 
-_sys = {"cpu_prev": None, "cpu_pct": None, "t": 0.0, "data": None}
+_sys = {"cpu_prev": None, "cpu_pct": None, "t": 0.0, "data": None, "io_prev": None, "io": None}
 
 
 def _read(path, default=""):
@@ -5213,6 +5226,33 @@ def _cpu_pct():
     if dt > 0:
         _sys["cpu_pct"] = round(100 * (1 - di / dt), 1)
     return _sys["cpu_pct"]
+
+
+_DISK_RE = re.compile(r"^(sd[a-z]+|vd[a-z]+|xvd[a-z]+|hd[a-z]+|nvme\d+n\d+|mmcblk\d+)$")   # whole disks, no partitions
+
+
+def _io_rate():
+    """Disk read / write in bytes per second since the previous call (/proc/diskstats is host-wide)."""
+    rd = wr = 0
+    for line in _read("/proc/diskstats").split("\n"):
+        f = line.split()
+        if len(f) > 9 and _DISK_RE.match(f[2]):
+            rd, wr = rd + int(f[5]) * 512, wr + int(f[9]) * 512
+    now, prev = (time.monotonic(), rd, wr), _sys["io_prev"]
+    _sys["io_prev"] = now
+    if prev and now[0] > prev[0]:
+        dt = now[0] - prev[0]
+        _sys["io"] = {"read": max(0, round((rd - prev[1]) / dt)), "write": max(0, round((wr - prev[2]) / dt))}
+    return _sys["io"] or {"read": 0, "write": 0}
+
+
+def _cpu_model():
+    """CPU model name from /proc/cpuinfo (x86: model name, ARM: Model / Hardware)."""
+    info = _read("/proc/cpuinfo")
+    for key in ("model name", "Model", "Hardware", "cpu model"):
+        if m := re.search(rf"^{key}\s*:\s*(.+)$", info, re.M):
+            return re.sub(r"\s+", " ", m.group(1)).replace("(R)", "").replace("(TM)", "").strip()
+    return ""
 
 
 def _meminfo():
@@ -5260,12 +5300,18 @@ def system_info(cfg):
         if _sys["data"] and time.monotonic() - _sys["t"] < 1:
             return _sys["data"]
     m = _meminfo()
-    la = _read("/proc/loadavg", "0 0 0").split()[:3]
+    lf = _read("/proc/loadavg", "0 0 0 0/0").split()
+    la = lf[:3]
+    run, _, total = (lf[3] if len(lf) > 3 else "0/0").partition("/")
     data = {
         "cpu": {"pct": _cpu_pct()},
         "mem": {"total": m.get("MemTotal", 0), "used": m.get("MemTotal", 0) - m.get("MemAvailable", 0)},
         "swap": {"total": m.get("SwapTotal", 0), "used": m.get("SwapTotal", 0) - m.get("SwapFree", 0)},
         "load": [float(x) for x in la],
+        "cores": os.cpu_count() or 1,
+        "model": _cpu_model(),
+        "procs": {"running": int(run or 0), "total": int(total or 0)},
+        "io": _io_rate(),
         "uptime": int(float(_read("/proc/uptime", "0").split()[0])),
         "temp": _temps(cfg),
         "disk": _disks(cfg),

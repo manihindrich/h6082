@@ -91,7 +91,7 @@ Shortcuts: <kbd>Ctrl</kbd>+<kbd>K</kbd> search in Slack, <kbd>G</kbd> <kbd>I</kb
 ##. `📊 Server`
 
 ## 🖥️ Home server
-{{sys cpu mem disk demo}}
+{{sys cpu mem load disk demo}}
 
 ## 💾 Backups
 | | last |

@@ -610,7 +610,21 @@ Kontroly běží ze serveru v kontejneru. Služby na hostiteli: `host.docker.int
 ## Server
 `{{sys}}` ukáže vytížení procesoru, paměti a disků serveru.
 {{example server}}
-- části: `cpu` `mem` `swap` `load` `temp` `uptime` `disk`, bez parametrů se zobrazí všechny
+- části, bez parametrů se zobrazí všechny:
+
+| část | ukáže |
+|:--|:--|
+| `cpu` | vytížení procesoru |
+| `cpuinfo` | jádra × model procesoru |
+| `mem` · `swap` | využití paměti a swapu |
+| `load` | průměrná zátěž za 1 · 5 · 15 min, pruh = poslední minuta ÷ jádra |
+| `procs` | procesy celkem a běžící |
+| `io` | čtení ↓ a zápis ↑ disků za sekundu |
+| `temp` | teploty (`[system] temps`) |
+| `disk` | zaplnění disků (`[system] disks`) |
+| `uptime` | doba od spuštění |
+
+- swap a teploty se ukážou jen tam, kde je server má; síťový provoz chybí záměrně, kontejner vidí jen ten svůj
 - hodnoty se obnovují každých `[system] interval_s` sekund
 - pruh je oranžový od 70 %, červený od 90 %
 

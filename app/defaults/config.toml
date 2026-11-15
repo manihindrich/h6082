@@ -106,14 +106,14 @@ auto_light = "obsidian-light"  # theme for "auto" with a light OS
 # in the browser, without asking the server. Used in examples (demo, showcase) so the page
 # does not reveal the names of your files and when you edit them.
 # Real history: remove the word `demo` from the line → {{history 5}}.
-enabled      = true
+enabled      = false        # true = versions of every saved file (history link in the editor, {{history}})
 coalesce_min = 5           # edits within this many minutes of the last version are merged into one
 max_versions = 50          # max. versions per file (the 3 newest always stay)
 max_age_days = 90          # older versions are deleted
 
 [system]
 # Server stats: a line {{sys}} or only selected parts, e.g. {{sys cpu mem disk}}.
-# Parts: cpu mem swap load temp uptime disk. Reads only the host's /proc and /sys.
+# Parts: cpu cpuinfo mem swap load procs io temp disk uptime. Reads only /proc and /sys, no extra rights.
 #
 # DEMO MODE: {{sys demo}} (also with parts, e.g. {{sys cpu mem demo}}) shows made-up values
 # right in the browser, without asking the server. Works even with enabled = false.

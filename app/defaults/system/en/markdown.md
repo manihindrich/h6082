@@ -610,7 +610,21 @@ Checks run from the server in the container. Services on the host: `host.docker.
 ## Server
 `{{sys}}` shows the server's CPU, memory and disk usage.
 {{example server}}
-- parts: `cpu` `mem` `swap` `load` `temp` `uptime` `disk`, without parameters all are shown
+- parts, without parameters all are shown:
+
+| part | shows |
+|:--|:--|
+| `cpu` | CPU usage |
+| `cpuinfo` | cores × CPU model |
+| `mem` · `swap` | memory and swap use |
+| `load` | load average 1 · 5 · 15 min, the bar = last minute ÷ cores |
+| `procs` | processes in total and running |
+| `io` | disk read ↓ and write ↑ per second |
+| `temp` | temperatures (`[system] temps`) |
+| `disk` | disk use (`[system] disks`) |
+| `uptime` | time since boot |
+
+- swap and temperatures show only where the server has them; network traffic is left out, a container sees only its own
 - values refresh every `[system] interval_s` seconds
 - the bar is orange from 70 %, red from 90 %
 

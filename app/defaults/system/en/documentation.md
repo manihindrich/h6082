@@ -442,8 +442,8 @@ A missing key has its default value.
 : the tab shown in the top right (default is the built-in settings page; the former `"h6082"` still works). It isn't placed in the left bar. Without user tabs it is at `/`. `""` = none.
 
 ## [history]
-`enabled` · `true`
-: change history of all `.md` files and `config.toml`. `{{history … demo}}` (made-up changes) works even when off.
+`enabled` · `false`
+: change history of all `.md` files and `config.toml` (the *history* link in the editor, diff and restore, `{{history}}`). Off by default, switch it on if you want file versions. `{{history … demo}}` (made-up changes) works even when off, `{{history … auto}}` shows sample data until it is on.
 
 `coalesce_min` · `5`
 : edits within this many minutes of the last version are merged into one, so autosave doesn't create hundreds of versions

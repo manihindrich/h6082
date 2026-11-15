@@ -54,8 +54,8 @@ The look is tuned in one clear TOML file. It all runs in a single lean container
 
 
 #
-## 📊 Server
-{{sys cpu mem load disk uptime auto}}
+##* 📊 Server
+{{sys cpu cpuinfo mem swap load procs io temp disk uptime auto}}
 
 
 #-

@@ -54,8 +54,8 @@ Vzhled se ladí v jednom přehledném TOML souboru. Celé to běží v jediném 
 
 
 #
-## 📊 Server
-{{sys cpu mem load disk uptime auto}}
+##* 📊 Server
+{{sys cpu cpuinfo mem swap load procs io temp disk uptime auto}}
 
 
 #-

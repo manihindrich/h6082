@@ -91,7 +91,7 @@ Rychlé klávesy: <kbd>Ctrl</kbd>+<kbd>K</kbd> hledání ve Slacku, <kbd>G</kbd>
 ##. `📊 Server`
 
 ## 🖥️ Domácí server
-{{sys cpu mem disk demo}}
+{{sys cpu mem load disk demo}}
 
 ## 💾 Zálohy
 | | poslední |
