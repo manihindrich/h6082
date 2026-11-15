@@ -492,6 +492,13 @@ details.lang-dd > summary:hover, details.lang-dd[open] > summary { border-color:
 /* languages: one per line */
 .lang-dd .pick-list { display: flex; flex-direction: column; gap: 4px; min-width: 100%; }
 .lang-dd .pick-list .lang-btn { text-align: left; }
+/* in the top bar of the settings page: a bit smaller, the lists open towards the page */
+.top-pickers { display: inline-flex; align-items: center; gap: 6px; }
+.top-pickers details.pick-dd { margin: 0; }
+.top-pickers details.theme-dd > summary { min-width: 150px; font-size: .85em; }
+.top-pickers details.lang-dd > summary { min-width: 96px; font-size: .85em; padding-top: 2px; padding-bottom: 2px; }
+.top-pickers .pick-list { left: auto; right: 0; text-align: left; }
+.top-pickers details.pick-dd > summary { text-align: left; }
 .sw-group > small { display: block; margin-bottom: 2px; }
 .sw-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 4px; }
 .swatch {

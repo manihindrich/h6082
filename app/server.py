@@ -3936,13 +3936,9 @@ GEAR_SVG = ('<svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" 
 
 
 def top_pickers(cfg):
-    """Language and theme drop-downs in the top bar of the about page (settings)."""
-    cur = cur_lang(cfg)
-    langs = "".join(f'<option value="{x}"{" selected" if x == cur else ""}>{LANG_NAMES[x]}</option>' for x in LANGS)
-    ths = [("auto", "auto")] + [(n, str(th.get("label", n))) for n, th in themes(cfg).items()]
-    opts = "".join(f'<option value="{html.escape(n)}">{html.escape(cap1(lab))}</option>' for n, lab in ths)
-    return (f'<select class="pick" data-lang-pick aria-label="{t(cfg, "pick_lang")}" title="{t(cfg, "pick_lang")}">{langs}</select>'
-            f'<select class="pick" data-theme-pick aria-label="{t(cfg, "pick_theme")}" title="{t(cfg, "pick_theme")}">{opts}</select>')
+    """Language and theme drop-downs in the top bar of the about page (settings): the same as {{lang}}
+    and {{theme}}, the theme items with their colour preview."""
+    return f'<span class="top-pickers">{lang_buttons(cfg)}{theme_swatches(cfg)}</span>'
 
 
 def tab_bar(cfg, tabs, active, live=True):

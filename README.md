@@ -1,11 +1,11 @@
-<h1 align="center">h6082</h1>
+<h1 align="center">h6082 — self-hosted homepage</h1>
 
 <p align="center">
-  <b>A self-hosted homepage and dashboard written in markdown.</b>
+  <b>A self-hosted homepage, start page and homelab dashboard written in markdown.</b>
 </p>
 
 <p align="center">
-  A lightweight alternative to <b>Homepage</b>, <b>Homer</b>, <b>Dashy</b> and <b>Heimdall</b>.<br>
+  A lightweight alternative to <b>Homepage</b>, <b>Homer</b>, <b>Dashy</b>, <b>Heimdall</b>, <b>Homarr</b> and <b>Flame</b>.<br>
   No database&nbsp;·&nbsp;no YAML sprawl&nbsp;·&nbsp;no JS framework — every tab is a markdown file you own.
 </p>
 
@@ -173,6 +173,12 @@ theme and language — stored only in their own browser. That is exactly how the
 `H6082_DEMO=1` goes one step further: still nothing is written on the server, but visitors can edit pages,
 tick tasks, write notes and change `##*` cards. Their changes live only in their own browser until they
 reset the demo; features the demo can't do stay visible, dimmed, with a hint.
+
+## Topics
+
+self-hosted homepage · selfhosted start page · homelab dashboard · browser start page · new tab page ·
+bookmarks dashboard · service status page · uptime dots · RSS reader · server monitoring · markdown dashboard ·
+Docker · home server · Raspberry Pi · Homepage / Homer / Dashy / Heimdall / Homarr / Flame alternative
 
 ## Under the hood
 
