@@ -32,7 +32,7 @@ The complete documentation with examples is always in [markdown.md](/markdown).
 More useful information about the app is in the [documentation](/documentation). The gateway to everything is [settings](/settings), hidden in the top right corner under {{gear}}.
 
 ##- Hide this tab
-You can hide the [Examples](/examples) tab with the switch in the header of the [markdown documentation](/markdown).
+You can hide the [Examples](/examples) tab with the “in the bar” checkbox next to the examples tab on the [markdown](/markdown) page.
 
 You can remove other tabs by opening them for editing in [settings](/settings) ({{gear}}) and choosing delete in the editor header.
 

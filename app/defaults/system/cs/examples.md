@@ -32,7 +32,7 @@ Kompletní dokumentaci s příklady vždy najdeš v [markdown.md](/markdown).
 Další zajímavé a užitečné informace o aplikaci jsou v [dokumentaci](/documentation). Branou ke všemu je [nastavení](/settings) skryté v pravém horním rohu pod {{gear}}.
 
 ##- Skryj záložku
-Záložku [Ukázky](/examples) můžeš skrýt přepínačem v hlavičce [markdown dokumentace](/markdown).
+Záložku [Ukázky](/examples) můžeš skrýt zaškrtávátkem „v liště“ vedle záložky ukázek na stránce [markdown](/markdown).
 
 Další záložky můžeš odstranit tím, že je v [nastavení](/settings) ({{gear}}) otevřeš k editaci a v hlavičce editoru dáš odstranit.
 

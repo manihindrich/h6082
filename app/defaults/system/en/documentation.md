@@ -487,7 +487,7 @@ ICMP ping doesn't work in the container because it runs without root privileges.
 : tabs hidden from the bar, still reachable at `/<name>` and from the file list on the settings page. Also toggled with the eye icon in the editor. Built-in pages (markdown, documentation) are never in the bar, no need to hide them; the exception is examples, see `examples`.
 
 `examples` · `true`
-: the examples page (`/examples`) as the first tab on the left; move it elsewhere by listing `"examples"` in `order`. The home page `/` stays the first user tab. Also toggled with the switch in the header of the [markdown showcase](/markdown) (with the editor password); the choice is written here.
+: the examples page (`/examples`) as the first tab on the left; move it elsewhere by listing `"examples"` in `order`. The home page `/` stays the first user tab. Also toggled with the “in the bar” checkbox next to the examples tab on the [markdown](/markdown) page (with the editor password); the choice is written here.
 
 `show_single` · `false`
 : show the bar even when there is only one user tab
@@ -675,8 +675,8 @@ Pick one in the dropdown in the top bar of the settings page. The choice writes 
 Preview without saving the choice: `?theme=<theme>`, e.g. [/documentation?theme=paper](/documentation?theme=paper).
 
 ## [theme]
-`default` · `"obsidian"`
-: active theme (can also be `"auto"`). Also set by the picker on the settings page.
+`default` · `"auto"`
+: active theme; `"auto"` follows the system (`auto_dark` / `auto_light`), otherwise a theme name, e.g. `"obsidian"`. Also set by the picker on the settings page.
 
 `auto_dark` · `"obsidian"`
 : theme for `auto` when the system is dark

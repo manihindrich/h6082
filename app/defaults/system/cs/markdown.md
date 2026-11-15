@@ -1,9 +1,4 @@
 #
-##.
-{{examples}}
-
----
-#
 ##. `Struktura`
 
 ---
@@ -694,13 +689,13 @@ Dovolená {{countdown +12}}.
 
 - `{{files}}`: seznam souborů s tlačítky *zobrazit* a *upravit*. `user` = jen tvoje, `system` = dokumentace, konfigurace a markdown.
 - `{{newfile}}`: formulář pro nový `.md` soubor
-- `{{theme}}`: dlaždice motivů, klik uloží `[theme] default`
-- `{{lang}}`: přepínač jazyka, uloží `[page] lang`
+- `{{theme}}`: rozbalovací výběr motivu s náhledem barev, volba uloží `[theme] default`
+- `{{lang}}`: rozbalovací výběr jazyka, uloží `[page] lang`
 - `{{email jméno doména}}`: chráněný e-mail
 - `{{countdown datum}}`: odpočet do data nebo od něj
 - `{{gear}}`: ozubené kolečko nastavení v textu
 
-`{{email}}`, `{{countdown}}` a `{{gear}}` fungují i uprostřed řádku. Uvnitř bloku kódu se shortcode nevykoná.
+`{{email}}`, `{{countdown}}` a `{{gear}}` fungují i uprostřed řádku. Víc řádkových shortcodů na jednom řádku (`{{lang}} {{theme}}`) se vykreslí vedle sebe. Uvnitř bloku kódu se shortcode nevykoná.
 
 ```md
 {{files}}

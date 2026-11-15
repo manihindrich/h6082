@@ -1,9 +1,4 @@
 #
-##.
-{{examples}}
-
----
-#
 ##. `Structure`
 
 ---
@@ -694,13 +689,13 @@ A line containing **only** a shortcode is replaced by generated content, e.g. th
 
 - `{{files}}`: list of files with *view* and *edit* buttons. `user` = only yours, `system` = documentation, configuration and markdown.
 - `{{newfile}}`: form for a new `.md` file
-- `{{theme}}`: theme tiles, a click saves `[theme] default`
-- `{{lang}}`: language switch, saves `[page] lang`
+- `{{theme}}`: theme drop-down with a colour preview, a choice saves `[theme] default`
+- `{{lang}}`: language drop-down, saves `[page] lang`
 - `{{email name domain}}`: protected e-mail
 - `{{countdown date}}`: countdown to or since a date
 - `{{gear}}`: settings gear in the text
 
-`{{email}}`, `{{countdown}}` and `{{gear}}` also work mid-line. Shortcodes are not executed inside a code block.
+`{{email}}`, `{{countdown}}` and `{{gear}}` also work mid-line. Several line shortcodes on one line (`{{lang}} {{theme}}`) are shown side by side. Shortcodes are not executed inside a code block.
 
 ```md
 {{files}}

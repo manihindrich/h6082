@@ -14,6 +14,9 @@
 🎬 co všechno markdown umí, ukazují [ukázky](/examples)
 {: .muted }
 
+##.
+{{lang}} {{theme}}
+
 ---
 #
 ##. `📅 Dnes`

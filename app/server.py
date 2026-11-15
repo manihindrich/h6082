@@ -214,7 +214,7 @@ DEFAULTS = {
         "wrap": True,
     },
     "theme": {
-        "default": "obsidian",
+        "default": "auto",       # follows the system: auto_dark / auto_light
         "auto_dark": "obsidian",
         "auto_light": "obsidian-light",
     },
@@ -374,6 +374,7 @@ STRINGS = {
         "ld_no_scene": "example {s} not found on the examples page",
         "ex_open": "examples ↗",
         "ex_tab": "examples tab in the bar",
+        "ex_tab_short": "in the bar",
         "ld_loop": "loop: play the scenes one after another (off = stop after each scene)",
         "ed_nums": "line numbers (show / hide)",
         "ld_saved": "✓ saved to the file",
@@ -550,6 +551,7 @@ STRINGS = {
         "ld_no_scene": "ukázka {s} na stránce ukázek není",
         "ex_open": "ukázky ↗",
         "ex_tab": "záložka ukázek v liště",
+        "ex_tab_short": "v liště",
         "ld_loop": "smyčka: scény jdou samy za sebou (vypnuto = zastaví se po každé scéně)",
         "ed_nums": "čísla řádků (zobrazit / skrýt)",
         "ld_saved": "✓ uloženo do souboru",
@@ -908,8 +910,8 @@ def css_vars(cfg):
 
 # [style.<element>]: base selector + properties that differ from the generic mapping below
 _DONE = "main li.task-list-item:has(> input:checked)"
-_CALLOUT = "main :is(.callout, .admonition, details)"
-_CTITLE = "main :is(.callout-title, .admonition-title, details > summary)"
+_CALLOUT = "main :is(.callout, .admonition, details:not(.pick-dd))"   # not the {{theme}} / {{lang}} drop-downs
+_CTITLE = "main :is(.callout-title, .admonition-title, details:not(.pick-dd) > summary)"
 _CELLS = "main :is(th, td)"
 STYLE_MAP = {
     "text": ("main p", {}),
@@ -1038,28 +1040,40 @@ def themes_css(cfg):
     return "".join(out)
 
 
+def cap1(text):
+    """First letter upper case, like the language names (English, Čeština): obsidian -> Obsidian."""
+    return text[:1].upper() + text[1:]
+
+
 def theme_swatches(cfg):
-    """Shortcode {{theme}}: theme tiles (colour preview), a click switches the theme."""
+    """Shortcode {{theme}}: a drop-down like the one in the top bar, its items keep the colour preview
+    (background and dots); the closed box shows the current theme. A click switches the theme."""
     def tile(name, t, label):
         st = (f"--sw-bg:{css_safe(t['bg'])};--sw-panel:{css_safe(t['panel'])};"
               f"--sw-accent:{css_safe(t['accent'])};--sw-text:{css_safe(t['text'])};"
               f"--sw-link:{css_safe(t['link'])}")
         return (f'<button type="button" class="swatch" data-theme-set="{name}" style="{st}" title="{name}">'
-                f'<span class="sw-dots"><i></i><i></i><i></i></span>{html.escape(label)}</button>')
+                f'<span class="sw-dots"><i></i><i></i><i></i></span>{html.escape(cap1(label))}</button>')
     T = themes(cfg)
     th = cfg["theme"]
     dark = T.get(th["auto_dark"], T["obsidian"])
     light = T.get(th["auto_light"], dark)
+    # auto: both palettes; style.css picks the one the system scheme shows now (prefers-color-scheme)
+    pal = lambda k, th: ";".join(f"--sw{k}-{x}:{css_safe(th[x])}" for x in ("bg", "panel", "accent", "text", "link"))
     auto = (f'<button type="button" class="swatch auto" data-theme-set="auto" title="auto" '
-            f'style="--sw-bg:{css_safe(dark["bg"])};--sw-panel:{css_safe(light["bg"])};'
-            f'--sw-accent:{css_safe(dark["accent"])};--sw-text:{css_safe(dark["text"])};--sw-link:{css_safe(light["accent"])}">'
-            f'<span class="sw-dots"><i></i><i></i><i></i></span>{t(cfg, "auto_system")}</button>')
+            f'style="{pal("d", dark)};{pal("l", light)}">'
+            f'<span class="sw-dots"><i></i><i></i><i></i></span>{cap1(t(cfg, "auto_system"))}</button>')
     groups = []
     for scheme, label in (("dark", t(cfg, "dark")), ("light", t(cfg, "light"))):
         tiles = "".join(tile(n, t, str(t["label"])) for n, t in T.items() if t["scheme"] == scheme)
         if tiles:
             groups.append(f'<div class="sw-group"><small>{label}</small><div class="sw-grid">{tiles}</div></div>')
-    return f'<div class="themes-pick">{auto}{"".join(groups)}</div>'
+    cur = th["default"] if th["default"] in T or th["default"] == "auto" else "auto"
+    first = auto if cur == "auto" else tile(cur, T[cur], str(T[cur]["label"]))
+    summary = re.sub(r'^<button[^>]*?(style="[^"]*")[^>]*>(.*)</button>$',
+                     r'<summary class="swatch pick-cur%s" \1>\2</summary>' % (" auto" if cur == "auto" else ""), first)
+    return (f'<details class="pick-dd theme-dd">{summary}'
+            f'<div class="themes-pick pick-list">{auto}{"".join(groups)}</div></details>')
 
 
 # Theme picker: sets data-theme at once and saves the choice to config.toml ([theme] default).
@@ -1072,11 +1086,26 @@ THEME_JS = """<script nonce="__NONCE__">
       b.classList.toggle('active', b.dataset.themeSet === root.dataset.theme);
     });
     document.querySelectorAll('select[data-theme-pick]').forEach((s) => { s.value = root.dataset.theme; });
+    document.querySelectorAll('details.theme-dd').forEach((d) => {   // {{theme}}: the closed box = current theme
+      const on = d.querySelector('.swatch.active[data-theme-set]'), cur = d.querySelector('.pick-cur');
+      if (on && cur) { cur.setAttribute('style', on.getAttribute('style')); cur.innerHTML = on.innerHTML; cur.classList.toggle('auto', on.classList.contains('auto')); }
+    });
   };
   document.addEventListener('click', (e) => {
-    const b = e.target.closest('.swatch[data-theme-set]');
-    if (b) setTheme(b.dataset.themeSet);
+    const b = e.target.closest('.swatch[data-theme-set], .pick-list .lang-btn');
+    if (b && b.dataset.themeSet) setTheme(b.dataset.themeSet);
+    document.querySelectorAll('details.pick-dd[open]').forEach((d) => {   // a choice or a click outside closes it
+      if (b || !d.contains(e.target)) d.open = false;
+    });
   });
+  // the list opens to the left when it would leave the window on the right
+  document.addEventListener('toggle', (e) => {
+    const d = e.target;
+    if (!d.matches || !d.matches('details.pick-dd') || !d.open) return;
+    const list = d.querySelector('.pick-list');
+    list.classList.remove('to-left');
+    if (list.getBoundingClientRect().right > document.documentElement.clientWidth - 8) list.classList.add('to-left');
+  }, true);
   document.addEventListener('change', (e) => {
     const s = e.target.closest('select[data-theme-pick], select[data-lang-pick]');
     if (!s) return;
@@ -1393,6 +1422,15 @@ def newfile_html(cfg):
             f'<button type="submit"{title}>{t(cfg, "newfile_button")}</button></form>')
 
 
+def examples_switch(cfg):
+    """The switch next to the examples tab (markdown page): [tabs] examples in config.toml."""
+    on = " checked" if cfg["tabs"].get("examples") else ""
+    off = demo_off(cfg) if DEMO else (" disabled" if READONLY or not cfg["editor"]["enabled"] else "")
+    tip = html.escape(t(cfg, "ex_tab"))
+    return (f'<label class="examples-switch" title="{tip}"{off}><input type="checkbox" data-examples-tab{on}'
+            f'{" disabled" if off and not DEMO else ""} aria-label="{tip}"> {t(cfg, "ex_tab_short")}</label>')
+
+
 def examples_bar(cfg):
     """Shortcode {{examples}} (header of the markdown page): a button to /examples and a switch that
     shows / hides the examples tab on the left of the bar ([tabs] examples in config.toml)."""
@@ -1404,11 +1442,12 @@ def examples_bar(cfg):
 
 
 def lang_buttons(cfg):
-    """Shortcode {{lang}}: language buttons; a click saves [page] lang to config.toml."""
+    """Shortcode {{lang}}: a language drop-down (like {{theme}}); a choice saves [page] lang to config.toml."""
     cur = cur_lang(cfg)
     btns = "".join(f'<button type="button" class="lang-btn{" active" if x == cur else ""}" data-lang-set="{x}">'
                    f'{LANG_NAMES[x]}</button>' for x in LANGS)
-    return f'<div class="lang-pick">{btns}</div>'
+    return (f'<details class="pick-dd lang-dd"><summary class="lang-btn pick-cur">{LANG_NAMES[cur]}</summary>'
+            f'<div class="pick-list lang-pick">{btns}</div></details>')
 
 
 SHORTCODE_RE = re.compile(r"^\{\{\s*(\w+)((?:\s+\S+)*)\s*\}\}$")
@@ -1548,31 +1587,42 @@ def history_box(cfg, args):
             f'<small>{t(cfg, "loading")}</small></div>{note}')
 
 
+LINE_SC = {"files", "rss", "theme", "history", "sys", "newfile", "lang", "examples"}   # shortcodes that fill a line
+SC_RE = re.compile(r"\{\{\s*(\w+)((?:\s+[^\s{}]+)*)\s*\}\}")
+
+
+def line_shortcode(cfg, name, args):
+    """One line shortcode -> its lines (HTML / markdown), or None when `name` is not one."""
+    if name == "files":
+        return files_markdown(cfg, args[0] if args and args[0] in ("system", "user") else "all")
+    html_ = {"rss": lambda: rss_box(cfg, args), "theme": lambda: theme_swatches(cfg),
+             "history": lambda: history_box(cfg, args), "sys": lambda: sys_box(cfg, args),
+             "newfile": lambda: newfile_html(cfg) if cfg["editor"]["enabled"]
+             else f"<small>{t(cfg, 'editor_disabled_small')}</small>",
+             "lang": lambda: lang_buttons(cfg), "examples": lambda: examples_bar(cfg)}.get(name)
+    return ["", html_(), ""] if html_ else None
+
+
 def expand_shortcodes(cfg, text):
     """A line with a shortcode (outside code blocks) -> generated content:
-    {{files [system|user]}}, {{newfile}}, {{lang}}, {{theme}}, {{rss URL [count]}}, {{sys …}}, {{history …}}."""
+    {{files [system|user]}}, {{newfile}}, {{lang}}, {{theme}}, {{rss URL [count]}}, {{sys …}}, {{history …}}.
+    Several of them on one line (`{{lang}} {{theme}}`) -> side by side in one row."""
     out = []
     for line, outside in iter_lines_with_fence(text):
         s = line.strip()
         m = SHORTCODE_RE.match(s) if outside else None
-        name, args = (m.group(1), m.group(2).split()) if m else (None, [])
-        if name == "files":
-            out.extend(files_markdown(cfg, args[0] if args and args[0] in ("system", "user") else "all"))
-        elif name == "rss":
-            out += ["", rss_box(cfg, args), ""]
-        elif name == "theme":
-            out += ["", theme_swatches(cfg), ""]
-        elif name == "history":
-            out += ["", history_box(cfg, args), ""]
-        elif name == "sys":
-            out += ["", sys_box(cfg, args), ""]
-        elif name == "newfile":
-            out += ["", newfile_html(cfg) if cfg["editor"]["enabled"]
-                    else f"<small>{t(cfg, 'editor_disabled_small')}</small>", ""]
-        elif name == "lang":
-            out += ["", lang_buttons(cfg), ""]
-        elif name == "examples":
-            out += ["", examples_bar(cfg), ""]
+        res = line_shortcode(cfg, m.group(1), m.group(2).split()) if m else None
+        if res is None and outside and s.startswith("{{"):
+            parts = list(SC_RE.finditer(s))
+            if (len(parts) > 1 and all(p.group(1) in LINE_SC for p in parts)
+                    and not SC_RE.sub("", s).strip()):
+                cells = []
+                for p in parts:
+                    lines = line_shortcode(cfg, p.group(1), p.group(2).split())
+                    cells.append(f'<div class="sc-cell">{"".join(x for x in lines if x.strip())}</div>')
+                res = ["", f'<div class="sc-row">{"".join(cells)}</div>', ""]
+        if res is not None:
+            out.extend(res)
         else:
             out.append(inline_shortcodes(line, cfg) if outside else line)
     return "\n".join(out)
@@ -3890,7 +3940,7 @@ def top_pickers(cfg):
     cur = cur_lang(cfg)
     langs = "".join(f'<option value="{x}"{" selected" if x == cur else ""}>{LANG_NAMES[x]}</option>' for x in LANGS)
     ths = [("auto", "auto")] + [(n, str(th.get("label", n))) for n, th in themes(cfg).items()]
-    opts = "".join(f'<option value="{html.escape(n)}">{html.escape(lab)}</option>' for n, lab in ths)
+    opts = "".join(f'<option value="{html.escape(n)}">{html.escape(cap1(lab))}</option>' for n, lab in ths)
     return (f'<select class="pick" data-lang-pick aria-label="{t(cfg, "pick_lang")}" title="{t(cfg, "pick_lang")}">{langs}</select>'
             f'<select class="pick" data-theme-pick aria-label="{t(cfg, "pick_theme")}" title="{t(cfg, "pick_theme")}">{opts}</select>')
 
@@ -3903,7 +3953,9 @@ def tab_bar(cfg, tabs, active, live=True):
         cur = ' aria-current="page"' if on else ""
         return f'<a class="{cls}"{cur} href="/{quote(name)}">{html.escape(tab_label(cfg, name))}</a>'
 
-    if cfg["tabs"].get("examples") and "examples" not in tabs and page_path(cfg, "examples"):
+    # on the markdown page the examples tab is always there, with its on/off switch next to it
+    ex_switch = active == "markdown" and page_path(cfg, "examples") is not None
+    if (cfg["tabs"].get("examples") or ex_switch) and "examples" not in tabs and page_path(cfg, "examples"):
         # [tabs] examples: the examples page among the user tabs, first unless [tabs] order places it
         order = list(cfg["tabs"]["order"])
         i = len([t for t in order[:order.index("examples")] if t in tabs]) if "examples" in order else 0
@@ -3914,7 +3966,11 @@ def tab_bar(cfg, tabs, active, live=True):
         brand = P_WRAP_RE.sub(r"\1", make_md(cfg).convert(header))
         left.append(f'<div class="brand">{brand}</div>')
     if len(tabs) >= 2 or (tabs and cfg["tabs"]["show_single"]):
-        left.append(f'<nav class="tabs">{"".join(link(t) for t in tabs)}</nav>')
+        def item(name):
+            if name != "examples" or not ex_switch:
+                return link(name)
+            return f'<span class="ex-group">{link(name)}{examples_switch(cfg)}</span>'
+        left.append(f'<nav class="tabs">{"".join(item(t) for t in tabs)}</nav>')
     about = cfg["page"]["about_tab"]
     if active and active not in tabs and active != about:
         right.append(link(active, " sub"))

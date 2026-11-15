@@ -14,6 +14,9 @@
 🎬 everything markdown can do is in the [examples](/examples)
 {: .muted }
 
+##.
+{{lang}} {{theme}}
+
 ---
 #
 ##. `📅 Today`

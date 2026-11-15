@@ -19,7 +19,7 @@ live_reload   = true       # the page refreshes itself after an .md / config sav
 order       = ["demo"]   # order from the left, e.g. ["dev", "infra"]; other files follow alphabetically
 hidden      = []           # hidden from the bar, still reachable via /<name> and from the settings page; also the eye icon in the editor
 examples    = true         # the examples page (/examples) as the first tab on the left ("examples" in order moves it);
-                           # also the switch on the markdown page
+                           # also the "in the bar" checkbox next to the tab on the markdown page
 show_single = true         # show the bar even with a single user tab
 
 [tabs.labels]
@@ -84,7 +84,7 @@ default_limit = 10         # number of items when not given
 # Built-in: obsidian (= [colors] below), nord, dracula, gruvbox-dark, solarized-dark,
 # catppuccin-mocha, tokyo-night, obsidian-light, gruvbox-light, solarized-light,
 # catppuccin-latte, paper; "auto" = follows the OS (auto_dark / auto_light).
-default    = "obsidian"        # active theme (or "auto")
+default    = "auto"        # active theme (or "auto")
 auto_dark  = "obsidian"        # theme for "auto" with a dark OS
 auto_light = "obsidian-light"  # theme for "auto" with a light OS
 

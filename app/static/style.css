@@ -281,7 +281,7 @@ blockquote {
   color: var(--muted);
 }
 
-.callout, .admonition, details {
+.callout, .admonition, details:not(.pick-dd) {
   --c: var(--callout-note);
   margin: 4px 0;
   padding: 3px 8px;
@@ -289,15 +289,15 @@ blockquote {
   border-radius: 3px;
   background: color-mix(in srgb, var(--c) 10%, transparent);
 }
-.callout-title, .admonition-title, details > summary {
+.callout-title, .admonition-title, details:not(.pick-dd) > summary {
   margin: 0;
   color: var(--c);
   font-weight: 700;
 }
 details > summary { cursor: pointer; list-style: none; }
 details > summary::-webkit-details-marker { display: none; }
-details > summary::before { content: "▸ "; }
-details[open] > summary::before { content: "▾ "; }
+details:not(.pick-dd) > summary::before { content: "▸ "; }
+details:not(.pick-dd)[open] > summary::before { content: "▾ "; }
 
 .callout-tip,     .admonition:is(.tip, .hint, .important, .success, .check, .done),     details:is(.tip, .hint, .important, .success, .check, .done)     { --c: var(--callout-tip); }
 .callout-info,    .admonition:is(.info, .todo, .question, .help, .faq),                  details:is(.info, .todo, .question, .help, .faq)                  { --c: var(--callout-info); }
@@ -457,6 +457,9 @@ li:has(> a[data-check]:first-child) > a[data-check]:first-child::before { margin
 .file-btns .tab { padding: 0 8px; font-size: .85em; }
 .file-desc { display: block; margin: 1px 0 0; color: var(--muted); font-size: .85em; }
 .file-name small.file-desc { margin-left: 0; }
+/* several line shortcodes on one line ({{lang}} {{theme}}): side by side, wrapping on narrow screens */
+.sc-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px 16px; }
+.sc-cell { min-width: 0; }
 /* {{sys auto}} / {{history auto}} with the feature off: a note under the sample data */
 .sample-note { display: block; margin-top: 4px; color: var(--muted); }
 /* the system list (documentation, configuration, markdown): bigger, easier to hit */
@@ -468,6 +471,27 @@ li:has(> a[data-check]:first-child) > a[data-check]:first-child::before { margin
 
 /* ---- theme picker ({{theme}}) ------------------------------------------ */
 .themes-pick { display: flex; flex-direction: column; gap: 6px; margin: 4px 0; }
+/* {{theme}} / {{lang}} as drop-downs: the closed box shows the current choice, the list opens over the page */
+details.pick-dd { position: relative; display: inline-block; margin: 2px 0; }
+details.pick-dd > summary { list-style: none; cursor: pointer; padding: 3px 22px 3px 6px; margin: 0; position: relative; font-weight: normal; }
+details.pick-dd > summary::-webkit-details-marker { display: none; }
+details.pick-dd > summary::after { content: "▾"; position: absolute; right: 7px; opacity: .7; }
+details.pick-dd[open] > summary::after { content: "▴"; }
+details.theme-dd > summary { min-width: 190px; color: var(--sw-text); }
+details.lang-dd > summary { min-width: 120px; padding-left: 12px; color: var(--text); background: var(--bg);
+  border: 1px solid var(--border); border-radius: calc(var(--radius) - 2px); }
+details.lang-dd > summary:hover, details.lang-dd[open] > summary { border-color: var(--accent); }
+.pick-list { position: absolute; z-index: 30; left: 0; top: calc(100% + 4px); margin: 0; max-width: calc(100vw - 32px);
+  max-height: min(70vh, 460px); overflow: auto; padding: 8px; background: var(--panel);
+  border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 8px 24px rgb(0 0 0 / .35); }
+.pick-list.to-left { left: auto; right: 0; }
+/* themes: Auto on top, then two columns, dark | light */
+.theme-dd .pick-list { width: 400px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; align-items: start; }
+.theme-dd .pick-list > .swatch.auto { grid-column: 1 / -1; }
+.theme-dd .pick-list .sw-grid { grid-template-columns: 1fr; }
+/* languages: one per line */
+.lang-dd .pick-list { display: flex; flex-direction: column; gap: 4px; min-width: 100%; }
+.lang-dd .pick-list .lang-btn { text-align: left; }
 .sw-group > small { display: block; margin-bottom: 2px; }
 .sw-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 4px; }
 .swatch {
@@ -481,8 +505,16 @@ li:has(> a[data-check]:first-child) > a[data-check]:first-child::before { margin
   border-radius: calc(var(--radius) - 2px);
   overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
 }
-.swatch.auto { width: max-content; }
-.swatch.auto .sw-dots i:nth-child(3) { background: var(--sw-panel); border-color: transparent; }
+.swatch.auto { width: max-content;
+  --sw-bg: var(--swd-bg); --sw-panel: var(--swd-panel); --sw-text: var(--swd-text); --sw-accent: var(--swd-accent); --sw-link: var(--swd-link); }
+@media (prefers-color-scheme: light) {   /* auto looks like the theme it shows right now */
+  .swatch.auto { --sw-bg: var(--swl-bg); --sw-panel: var(--swl-panel); --sw-text: var(--swl-text); --sw-accent: var(--swl-accent); --sw-link: var(--swl-link); }
+}
+/* the dots: dark accent · light accent · the other scheme's background */
+.swatch.auto .sw-dots i:nth-child(1) { background: var(--swd-accent); }
+.swatch.auto .sw-dots i:nth-child(2) { background: var(--swl-accent); }
+.swatch.auto .sw-dots i:nth-child(3) { background: var(--swl-bg); }
+@media (prefers-color-scheme: light) { .swatch.auto .sw-dots i:nth-child(3) { background: var(--swd-bg); } }
 .swatch:hover { border-color: var(--sw-accent); }
 .swatch.active { outline: 2px solid var(--accent); outline-offset: 1px; }
 .sw-dots { display: inline-flex; gap: 2px; flex: none; }
@@ -721,6 +753,11 @@ body.ld-max-open { overflow: hidden; }
 .ld-missing { color: var(--callout-warning); font-size: .9em; }
 /* {{examples}} (markdown page header): a button to /examples and the switch for its tab in the bar */
 .examples-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
+/* markdown page: the examples tab and its switch, tied together by a soft dashed frame */
+.ex-group { display: inline-flex; align-items: center; gap: 8px; padding: 1px 8px 1px 1px;
+  border: 1px dashed color-mix(in srgb, var(--accent) 45%, transparent); border-radius: var(--radius); }
+.ex-group .examples-switch { font-size: .9em; }
+.ex-group:not(:has(input:checked)) > a.tab { opacity: .55; }
 .examples-switch { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); cursor: pointer; }
 .examples-switch input { accent-color: var(--accent); cursor: pointer; }
 .examples-switch[aria-disabled="true"], .examples-switch:has(input:disabled) { opacity: .6; cursor: default; }

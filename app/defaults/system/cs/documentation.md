@@ -487,7 +487,7 @@ ICMP ping v kontejneru nejde, protože kontejner běží bez root práv. Místo 
 : záložky skryté z lišty, dál dostupné přes `/<jméno>` a ze seznamu souborů na stránce nastavení. Přepíná se i ikonou oka v editoru. Vestavěné stránky (markdown, dokumentace) v liště nejsou nikdy, skrývat je netřeba; výjimkou jsou ukázky, viz `examples`.
 
 `examples` · `true`
-: stránka ukázek (`/examples`) jako první záložka vlevo; jinam ji posuneš uvedením `"examples"` v `order`. Domovská stránka `/` zůstává první uživatelská záložka. Přepíná se i přepínačem v hlavičce [ukázky markdownu](/markdown) (s heslem editoru), volba se zapíše sem.
+: stránka ukázek (`/examples`) jako první záložka vlevo; jinam ji posuneš uvedením `"examples"` v `order`. Domovská stránka `/` zůstává první uživatelská záložka. Přepíná se i zaškrtávátkem „v liště“ vedle záložky ukázek na stránce [markdown](/markdown) (s heslem editoru), volba se zapíše sem.
 
 `show_single` · `false`
 : zobrazit lištu, i když existuje jen jedna uživatelská záložka
@@ -675,8 +675,8 @@ Výběr je v rozbalovací nabídce v horní liště stránky nastavení. Volba z
 Náhled bez uložení volby: `?theme=<motiv>`, např. [/documentation?theme=paper](/documentation?theme=paper).
 
 ## [theme]
-`default` · `"obsidian"`
-: aktivní motiv (může být i `"auto"`). Nastavuje ho i výběr na stránce nastavení.
+`default` · `"auto"`
+: aktivní motiv; `"auto"` se řídí systémem (`auto_dark` / `auto_light`), jinak název motivu, např. `"obsidian"`. Nastavuje ho i výběr na stránce nastavení.
 
 `auto_dark` · `"obsidian"`
 : motiv pro `auto` při tmavém systému
