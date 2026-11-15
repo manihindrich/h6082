@@ -22,6 +22,7 @@
 [code.nolog.cz/hindrich/h6082](https://code.nolog.cz/hindrich/h6082)
 [github.com/manihindrich/h6082](https://github.com/manihindrich/h6082) (mirror)
 ---
+/
 #
 ##. `📅 Dnes`
 
