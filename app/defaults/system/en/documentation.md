@@ -73,6 +73,7 @@ H6082_EDITOR_PASSWORD=… # openssl rand -base64 24
 H6082_ALLOWED_HOSTS=    # extra hostnames, e.g. a domain behind a reverse proxy
 H6082_READONLY=         # 1 = public read-only page (see Read-only mode)
 H6082_DEMO=             # 1 = demo: read-only, but edits in the visitor's browser
+H6082_CLIENT_IP_HEADER= # demo behind a proxy: header with the visitor's IP, e.g. CF-Connecting-IP
 H6082_DISK_ROOT=/var/empty
 ```
 After changing `.env`, run `docker compose up -d`. Exposing the page to the network is covered in the Security block.

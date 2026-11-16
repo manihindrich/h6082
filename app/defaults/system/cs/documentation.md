@@ -73,6 +73,7 @@ H6082_EDITOR_PASSWORD=… # openssl rand -base64 24
 H6082_ALLOWED_HOSTS=    # další hostnames, např. doména za reverzní proxy
 H6082_READONLY=         # 1 = veřejná stránka jen pro čtení (viz Režim jen pro čtení)
 H6082_DEMO=             # 1 = demo: jen pro čtení, ale úpravy v prohlížeči návštěvníka
+H6082_CLIENT_IP_HEADER= # demo za proxy: hlavička s IP návštěvníka, např. CF-Connecting-IP
 H6082_DISK_ROOT=/var/empty
 ```
 Po změně `.env` spusť `docker compose up -d`. Zpřístupnění do sítě popisuje blok Bezpečnost.

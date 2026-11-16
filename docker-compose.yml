@@ -18,6 +18,7 @@ services:
       H6082_ALLOWED_HOSTS: ${H6082_ALLOWED_HOSTS:-}
       H6082_READONLY: ${H6082_READONLY:-}
       H6082_DEMO: ${H6082_DEMO:-}
+      H6082_CLIENT_IP_HEADER: ${H6082_CLIENT_IP_HEADER:-}
     volumes:
       # content: writable for the web editor
       - ./content:/app/content

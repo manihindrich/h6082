@@ -53,6 +53,10 @@ READONLY = os.environ.get("H6082_READONLY", "").lower() in ("1", "true", "yes")
 # notes and ##* cards — their changes live only in their own browser (localStorage).
 DEMO = os.environ.get("H6082_DEMO", "").lower() in ("1", "true", "yes")
 READONLY = READONLY or DEMO
+DEMO_RENDER_KB = 64   # demo: the largest visitor text /api/render draws (shipped pages are < 40 KB)
+# The visitor's address for the demo rate limit behind a proxy, e.g. CF-Connecting-IP (Cloudflare).
+# Set it only when the app is reachable through that proxy alone, otherwise anyone can fake it.
+CLIENT_IP_HEADER = os.environ.get("H6082_CLIENT_IP_HEADER", "").strip()
 CONTENT = APP / "defaults" if READONLY else Path(os.environ.get("CONTENT_DIR", APP / "content"))
 CFG_FILE = CONTENT / "config.toml"
 PAGES = Path(os.environ.get("PAGES_DIR", CONTENT / "pages"))
@@ -388,6 +392,7 @@ STRINGS = {
         "js_demo_reset_confirm": "Discard all your changes and return the demo to its original state?",
         "js_demo_confirm_delete": "Delete {f} with its translations? Only in this browser; \u201creset demo\u201d brings it back.",
         "js_demo_close": "close",
+        "js_demo_too_big": f"saved in this browser, but too big for the demo preview (max {DEMO_RENDER_KB} KB)",
         "js_demo_cfg_ro": "The demo shows config.toml read-only: changes would not take effect.",
         "js_demo_deleted": "This page was deleted in the demo. \u201creset demo\u201d brings it back.",
         "block_edit": "edit this card",
@@ -569,6 +574,7 @@ STRINGS = {
         "js_demo_reset_confirm": "Zahodit všechny své změny a vrátit demo do původního stavu?",
         "js_demo_confirm_delete": "Smazat {f} i s překlady? Jen v tomto prohlížeči, tlačítko \u201eresetovat demo\u201c ji vrátí.",
         "js_demo_close": "zavřít",
+        "js_demo_too_big": f"uloženo v tomto prohlížeči, ale na náhled v demu je to moc velké (max. {DEMO_RENDER_KB} KB)",
         "js_demo_cfg_ro": "V demu je config.toml jen pro čtení: změny by se neprojevily.",
         "js_demo_deleted": "Tahle stránka je v demu smazaná. Vrátí ji tlačítko \u201eresetovat demo\u201c.",
         "block_edit": "upravit kartu",
@@ -3861,6 +3867,7 @@ __SMART__
       if (NAME === 'config.toml' || (!dirty() && !force)) return;   // config: read-only in the demo
       saved = ta.value;
       window.h6082Demo.set(NAME, saved);
+      if (new TextEncoder().encode(saved).length > __DEMO_KB__ * 1024) { set(T.demo_too_big, 'warn'); return; }
       set(T.demo_saved + ' ' + new Date().toLocaleTimeString(T.locale), 'ok');
       const fr = document.querySelector('.ed-panes iframe');
       if (fr && fr.contentWindow) fr.contentWindow.location.reload();
@@ -4893,7 +4900,7 @@ def build_editor(cfg, tabs, fname):
     {iframe}
   </div>
 </div>"""
-    js = EDITOR_JS.replace("__SMART__", smart_js(cfg)).replace("__NAME__", json.dumps(fname)).replace("__BACK__", json.dumps("/" + quote(about))).replace("__DELAY__", str(int(cfg["editor"]["autosave_ms"])))
+    js = EDITOR_JS.replace("__SMART__", smart_js(cfg)).replace("__NAME__", json.dumps(fname)).replace("__BACK__", json.dumps("/" + quote(about))).replace("__DELAY__", str(int(cfg["editor"]["autosave_ms"]))).replace("__DEMO_KB__", str(DEMO_RENDER_KB))
     return page(cfg, f"✎ {fname} · {cfg['page']['title']}", body, js, "editing")
 
 
@@ -5964,15 +5971,18 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(404, {"error": t(cfg, "err_unknown_endpoint")})
         if err := self._api_denied(cfg, editor=False):
             return self._json(403, {"error": err})
-        if not demo_rate_ok(self.client_address[0]):
+        ip = (self.headers.get(CLIENT_IP_HEADER) or "").strip() if CLIENT_IP_HEADER else ""
+        if not demo_rate_ok(ip or self.client_address[0]):
             return self._json(429, {"error": t(cfg, "err_rate")})
         try:
             data = self._read_json(cfg)
         except ValueError as e:
             return self._json(400, {"error": str(e)})
         name, doc = str(data.get("name", "")), data.get("doc")
-        if not isinstance(doc, str) or len(doc.encode()) > int(cfg["editor"]["max_size_kb"]) * 1024:
+        if not isinstance(doc, str):
             return self._json(400, {"error": t(cfg, "err_bad_request")})
+        if len(doc.encode()) > DEMO_RENDER_KB * 1024:   # rendering costs CPU under the global lock
+            return self._json(413, {"error": t(cfg, "err_too_big")})
         lang = str(data.get("lang") or "") or self._cookie("h6082_lang") or None
         with _lock:
             cfg = with_lang(cfg, lang)
