@@ -511,7 +511,7 @@ STRINGS = {
         "err_rate": "too many requests, try again in a minute",
         "js_demo_saved": "saved in this browser",
         "js_demo_changed": "changed pages: {n}",
-        "js_demo_reset_confirm": "Discard all your changes and return the demo to its original state?",
+        "js_demo_reset_confirm": "Discard all your changes, including the language and theme, and return the demo to its original state?",
         "js_demo_confirm_delete": "Delete {f} with its translations? Only in this browser; \u201creset demo\u201d brings it back.",
         "js_demo_close": "close",
         "js_demo_too_big": f"saved in this browser, but too big for the demo preview (max {DEMO_RENDER_KB} KB)",
@@ -693,7 +693,7 @@ STRINGS = {
         "err_rate": "příliš mnoho požadavků, zkus to za minutu",
         "js_demo_saved": "uloženo v tomto prohlížeči",
         "js_demo_changed": "změněné stránky: {n}",
-        "js_demo_reset_confirm": "Zahodit všechny své změny a vrátit demo do původního stavu?",
+        "js_demo_reset_confirm": "Zahodit všechny své změny včetně jazyka a motivu a vrátit demo do původního stavu?",
         "js_demo_confirm_delete": "Smazat {f} i s překlady? Jen v tomto prohlížeči, tlačítko \u201eresetovat demo\u201c ji vrátí.",
         "js_demo_close": "zavřít",
         "js_demo_too_big": f"uloženo v tomto prohlížeči, ale na náhled v demu je to moc velké (max. {DEMO_RENDER_KB} KB)",
@@ -3216,8 +3216,10 @@ window.h6082Demo = (() => {
   function set(k, v) { try { localStorage.setItem(P + k, v); } catch (e) { /* storage blocked: edit lasts for the page only */ } count(); }
   function reset() {
     if (!confirm(T.demo_reset_confirm)) return;
-    keys().forEach((k) => { try { localStorage.removeItem(k); } catch (e) {} });
-    location.reload();
+    // everything this site keeps in the browser: edits, folded cards, editor layout, theme, language
+    try { Object.keys(localStorage).filter((k) => k.startsWith('h6082-')).forEach((k) => localStorage.removeItem(k)); } catch (e) {}
+    ['h6082_theme', 'h6082_lang'].forEach((c) => { document.cookie = c + '=; path=/; max-age=0; SameSite=Lax'; });
+    location.replace(location.pathname);   // without ?theme= / ?lang=, which would override the defaults again
   }
   async function render() {
     const rows = document.querySelector('[data-fid]'), m0 = meta();

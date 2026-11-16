@@ -198,7 +198,7 @@ Spouštěj ho se systémem souborů jen pro čtení a bez volume (viz `h6082-dep
 - upravuje stránky v editoru, odškrtává a přidává úkoly, píše do poznámek a mění karty `##*`
 - zakládá, přejmenovává, skrývá a maže stránky i jejich překlady; záložky i seznam souborů v nastavení to hned ukážou
 - config.toml si může prohlédnout v editoru, ale jen pro čtení
-- změny se ukládají jen v jeho prohlížeči (`localStorage`) a vydrží, dokud nezmáčkne *resetovat demo* v barevné liště nahoře; server nic nezapíše
+- změny se ukládají jen v jeho prohlížeči (`localStorage`) a vydrží, dokud nezmáčkne *resetovat demo* v barevné liště nahoře; server nic nezapíše. Reset vrátí na výchozí i jazyk, motiv, sbalené karty a rozložení editoru
 - stránku s jeho změnami vykreslí server přes `/api/render`, nic si přitom neukládá; RSS a kontroly stavu z textu návštěvníka se nespouštějí
 - historie a načtení výchozího configu zůstanou vidět ztlumené, nic nedělají a po najetí myší, zaměření nebo klepnutí ukážou „V demu to nejde vyzkoušet“
 
