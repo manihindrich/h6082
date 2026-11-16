@@ -195,9 +195,11 @@ Run it with a read-only file system and no volume (see `h6082-deploy-demo`). Eve
 **Demo mode** (`H6082_DEMO=1`) is a read-only mode in which visitors can try the app:
 
 - they edit pages in the editor, tick and add tasks, write notes and change `##*` cards
-- changes are stored only in their browser (`localStorage`) and last until they press *reset demo*; the server writes nothing
+- they create, rename, hide and delete pages and their translations; the tab bar and the file list in settings show it right away
+- they can view config.toml in the editor, read-only
+- changes are stored only in their browser (`localStorage`) and last until they press *reset demo* in the coloured bar at the top; the server writes nothing
 - the server renders the page with their changes via `/api/render` and stores nothing; RSS and status checks from the visitor's text are not run
-- nothing is hidden: creating, renaming and deleting files, adding a translation, editing the config and history stay visible but dimmed, do nothing, and on hover, focus or tap show "Not available in the demo"
+- history and loading the default config stay visible but dimmed, do nothing, and on hover, focus or tap show "You can't try this in the demo"
 
 #
 ## Sample data

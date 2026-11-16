@@ -195,9 +195,11 @@ Spouštěj ho se systémem souborů jen pro čtení a bez volume (viz `h6082-dep
 **Demo mód** (`H6082_DEMO=1`) je režim jen pro čtení, ve kterém si návštěvník aplikaci může vyzkoušet:
 
 - upravuje stránky v editoru, odškrtává a přidává úkoly, píše do poznámek a mění karty `##*`
-- změny se ukládají jen v jeho prohlížeči (`localStorage`) a vydrží, dokud nezmáčkne *obnovit demo*; server nic nezapíše
+- zakládá, přejmenovává, skrývá a maže stránky i jejich překlady; záložky i seznam souborů v nastavení to hned ukážou
+- config.toml si může prohlédnout v editoru, ale jen pro čtení
+- změny se ukládají jen v jeho prohlížeči (`localStorage`) a vydrží, dokud nezmáčkne *resetovat demo* v barevné liště nahoře; server nic nezapíše
 - stránku s jeho změnami vykreslí server přes `/api/render`, nic si přitom neukládá; RSS a kontroly stavu z textu návštěvníka se nespouštějí
-- nic není skryté: zakládání, přejmenování a mazání souborů, přidání překladu, úprava configu a historie zůstanou vidět ztlumené, nic nedělají a po najetí myší, zaměření nebo klepnutí ukážou „V demu to nejde vyzkoušet“
+- historie a načtení výchozího configu zůstanou vidět ztlumené, nic nedělají a po najetí myší, zaměření nebo klepnutí ukážou „V demu to nejde vyzkoušet“
 
 #
 ## Ukázková data

@@ -172,9 +172,10 @@ disappear, the content comes only from the image and no volume is needed. Visito
 theme and language — stored only in their own browser. That is exactly how the
 [live demo](https://h.6082.cz/) runs: read-only container, no volume, no secrets.
 
-`H6082_DEMO=1` goes one step further: still nothing is written on the server, but visitors can edit pages,
-tick tasks, write notes and change `##*` cards. Their changes live only in their own browser until they
-reset the demo; features the demo can't do stay visible, dimmed, with a hint.
+`H6082_DEMO=1` goes one step further: still nothing is written on the server, but visitors can create,
+edit, rename, hide and delete pages, tick tasks, write notes and change `##*` cards, and view `config.toml`
+read-only. Their changes live only in their own browser until they press *reset demo* in the coloured bar
+at the top; history stays visible, dimmed, with a hint.
 
 ## Topics
 
