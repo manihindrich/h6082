@@ -464,6 +464,7 @@ li:has(> a[data-check]:first-child) > a[data-check]:first-child::before { margin
 .sample-note { display: block; margin-top: 4px; color: var(--muted); }
 /* the system list (documentation, configuration, markdown): bigger, easier to hit */
 .files-system .file-row { padding: 10px 0; gap: 12px; }
+.file-row[hidden] { display: none; }   /* demo: a page deleted in the visitor's browser */
 .files-system .file-name { font-size: 1.45em; font-weight: 700; line-height: 1.2; color: var(--text); }
 .files-system .file-desc { margin-top: 2px; font-size: .58em; font-weight: 400; line-height: 1.3; }
 .files-system .file-btns { flex-wrap: nowrap; }

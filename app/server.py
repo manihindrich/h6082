@@ -386,6 +386,8 @@ STRINGS = {
         "js_demo_saved": "saved in this browser",
         "js_demo_changed": "changed pages: {n}",
         "js_demo_reset_confirm": "Discard all your changes and return the demo to its original state?",
+        "js_demo_confirm_delete": "Delete {f} with its translations? Only in this browser; \u201creset demo\u201d brings it back.",
+        "js_demo_deleted": "This page was deleted in the demo. \u201creset demo\u201d brings it back.",
         "block_edit": "edit this card",
         "err_block_changed": "the card was changed elsewhere — the page reloads, try again",
         "err_block_heading": "a card cannot contain # / ## lines — add new cards in the editor",
@@ -563,6 +565,8 @@ STRINGS = {
         "js_demo_saved": "uloženo v tomto prohlížeči",
         "js_demo_changed": "změněné stránky: {n}",
         "js_demo_reset_confirm": "Zahodit všechny své změny a vrátit demo do původního stavu?",
+        "js_demo_confirm_delete": "Smazat {f} i s překlady? Jen v tomto prohlížeči, tlačítko \u201eresetovat demo\u201c ji vrátí.",
+        "js_demo_deleted": "Tahle stránka je v demu smazaná. Vrátí ji tlačítko \u201eresetovat demo\u201c.",
         "block_edit": "upravit kartu",
         "err_block_changed": "karta se mezitím změnila jinde — stránka se načte znovu, zkus to pak",
         "err_block_heading": "karta nesmí obsahovat řádky # / ## — nové karty přidej v editoru",
@@ -1384,9 +1388,10 @@ def files_markdown(cfg, which="all"):
     def btn(href, label, extra=""):
         return f'<a class="tab" href="{href}"{extra}>{html.escape(label)}</a>'
 
-    def row(name, btns, desc=""):
+    def row(name, btns, desc="", stem=None):
         d = f'<small class="file-desc">{html.escape(desc)}</small>' if desc else ""
-        return (f'<div class="file-row"><span class="file-name">{html.escape(name)}{d}</span>'
+        st = f' data-stem="{html.escape(stem)}"' if stem is not None and DEMO else ""   # demo: rows the browser hides / adds
+        return (f'<div class="file-row"{st}><span class="file-name">{html.escape(name)}{d}</span>'
                 f'<span class="file-btns">{"".join(btns)}</span></div>')
 
     rows, sysrows = [], []
@@ -1396,7 +1401,7 @@ def files_markdown(cfg, which="all"):
                 continue
             src = page_path(cfg, name)
             edit = [btn(f"/edit/{quote(file_id(src))}", t(cfg, "f_edit"))] if ed and src else []
-            rows.append(row(name, [btn(f"/{quote(name)}", t(cfg, "f_view"))] + edit))
+            rows.append(row(name, [btn(f"/{quote(name)}", t(cfg, "f_view"))] + edit, stem=name))
     if which in ("all", "system"):
         sysrows.append(row("markdown", [btn("/markdown", t(cfg, "f_view"))], t(cfg, "f_markdown_desc")))
         sysrows.append(row(t(cfg, "f_docs"), [btn("/documentation", t(cfg, "f_view"))], t(cfg, "f_docs_desc")))
@@ -1404,6 +1409,9 @@ def files_markdown(cfg, which="all"):
                            t(cfg, "f_config_desc")))
     if not rows and not sysrows:
         return ["", f"<small>{t(cfg, 'no_files')}</small>", ""]
+    if DEMO and which in ("all", "user"):   # a hidden model row for pages created in the visitor's browser
+        tpl = row("__S__", [btn("/__S__", t(cfg, "f_view"))] + ([btn("/edit/__F__", t(cfg, "f_edit"))] if ed else []), stem="__S__")
+        rows.append(tpl.replace('<div class="file-row"', '<div class="file-row demo-file-row" hidden', 1))
     out = f'<div class="files">{"".join(rows)}</div>' if rows else ""
     out += f'<div class="files files-system">{"".join(sysrows)}</div>' if sysrows else ""
     return ["", out, ""]
@@ -2987,11 +2995,54 @@ window.h6082Demo = (() => {
     m.del = m.del.filter((x) => x !== st);
     setMeta(m);
   }
+  function remove(st) {   // delete a tab with its translations in this browser
+    keys().forEach((k) => { if (!k.startsWith(P + '~') && stemOf(k.slice(P.length)) === st) { try { localStorage.removeItem(k); } catch (e) {} } });
+    const m = meta(), local = m.new.includes(st);
+    m.new = m.new.filter((x) => x !== st);
+    m.hid = m.hid.filter((x) => x !== st);
+    if (!local && !m.del.includes(st)) m.del.push(st);
+    setMeta(m);
+  }
+  async function rename(st, to) {   // a tab with its translations: local copies or the server's files
+    const moved = [];
+    for (const sfx of ['.md'].concat(LANGS.map((x) => '.' + x + '.md'))) {
+      let txt = get(st + sfx);
+      if (txt === null) {
+        try {
+          const r = await fetch('/api/file?name=' + encodeURIComponent(st + sfx), {headers: {'X-H6082': '1'}, cache: 'no-store'});
+          const j = await r.json();
+          if (r.ok && j.mtime !== '0') txt = j.text;
+        } catch (e) { /* not there */ }
+      }
+      if (txt !== null) moved.push([to + sfx, txt]);
+    }
+    const hid = meta().hid.includes(st);
+    remove(st);
+    moved.forEach(([f, txt]) => create(f.replace(/\\.md$/, ''), txt));
+    if (hid) { const m = meta(); m.hid.push(to); setMeta(m); }
+  }
   function tabs() {   // the tab bar: + pages created here, − deleted / hidden ones
     const m = meta(), nav = document.querySelector('nav.tabs');
     document.querySelectorAll('header.topbar a.tab').forEach((a) => {
       const s = decodeURIComponent((a.getAttribute('href') || '').slice(1));
       if (m.del.includes(s) || (m.hid.includes(s) && !a.hasAttribute('aria-current'))) a.hidden = true;
+    });
+    document.querySelectorAll('.files .file-row[data-stem]').forEach((r) => { if (m.del.includes(r.dataset.stem)) r.hidden = true; });
+    document.querySelectorAll('.files .demo-file-row').forEach((tpl) => {   // settings: the list of files
+      const box = tpl.parentElement;
+      for (const s of m.new) {
+        if (m.del.includes(s) || [...box.children].some((r) => r.dataset.stem === s)) continue;
+        const lang = document.documentElement.lang;
+        const f = [s + '.' + lang + '.md', s + '.md'].concat(LANGS.map((x) => s + '.' + x + '.md')).find((x) => get(x) !== null) || s + '.md';
+        const r = tpl.cloneNode(true);
+        r.classList.remove('demo-file-row'); r.hidden = false;
+        r.dataset.stem = s;
+        r.querySelector('.file-name').textContent = s;
+        r.querySelectorAll('a').forEach((a) => {
+          a.setAttribute('href', a.getAttribute('href').replace('__S__', encodeURIComponent(s)).replace('__F__', encodeURIComponent(f)));
+        });
+        box.append(r);
+      }
     });
     if (!nav) return;
     for (const s of m.new) {
@@ -3021,6 +3072,14 @@ window.h6082Demo = (() => {
   async function render() {
     const rows = document.querySelector('[data-fid]'), m0 = meta();
     const name = rows ? rows.dataset.tab : here();
+    if (rows && m0.del.includes(name)) {   // deleted here: a note instead of the page
+      const box = document.createElement('div'), p = document.createElement('p');
+      box.className = 'grid'; box.innerHTML = '<div class="col"><section class="block"><div class="block-body"></div></section></div>';
+      p.textContent = T.demo_deleted;
+      box.querySelector('.block-body').append(p);
+      rows.replaceWith(box);
+      return;
+    }
     if (!name || !(rows || m0.new.includes(name))) return;
     // the visitor's copy: their own translation for this language first, then the file shown
     const lang = document.documentElement.lang;
@@ -3073,7 +3132,7 @@ window.h6082Demo = (() => {
   });
   count();
   render();
-  return {get, set, render, count, create, meta, setMeta};
+  return {get, set, render, count, create, remove, rename, meta, setMeta, stemOf};
 })();
 </script>"""
 
@@ -3869,11 +3928,23 @@ __SMART__
     ta.setSelectionRange(0, 0); ta.scrollTop = 0;
   };
   const hide = document.getElementById('hide');   // [tabs] hidden: out of the tab bar, reachable from settings
+  const hidePaint = (on) => {
+    hide.setAttribute('aria-pressed', String(on));
+    hide.title = hide.dataset[on ? 'tipOn' : 'tipOff']; hide.setAttribute('aria-label', hide.title);
+  };
+  if (hide && T.demo && window.h6082Demo.meta().hid.includes(hide.dataset.stem)) hidePaint(true);
   if (hide) hide.onclick = async () => {
     if (hide.hasAttribute('data-demo-off')) return;
     const on = hide.getAttribute('aria-pressed') !== 'true';
-    const r = await post('POST', '/api/tab-hidden', JSON.stringify({name: hide.dataset.stem, hidden: on}));
-    if (!r.ok) { alert(r.j.error || r.status); return; }
+    if (T.demo) {   // demo: hidden in this browser only
+      const m = window.h6082Demo.meta();
+      m.hid = m.hid.filter((x) => x !== hide.dataset.stem);
+      if (on) m.hid.push(hide.dataset.stem);
+      window.h6082Demo.setMeta(m);
+    } else {
+      const r = await post('POST', '/api/tab-hidden', JSON.stringify({name: hide.dataset.stem, hidden: on}));
+      if (!r.ok) { alert(r.j.error || r.status); return; }
+    }
     hide.setAttribute('aria-pressed', String(on));
     hide.title = hide.dataset[on ? 'tipOn' : 'tipOff']; hide.setAttribute('aria-label', hide.title);
     document.querySelectorAll('nav.tabs a.tab').forEach((a) => {
@@ -3881,20 +3952,22 @@ __SMART__
     });
   };
   if (ren) ren.onclick = async () => {
-    const cur = NAME.replace(/\\.md$/, '');
+    const cur = T.demo ? window.h6082Demo.stemOf(NAME) : NAME.replace(/\\.md$/, '');   // demo: the whole tab
     const to = (prompt(T.rename_prompt, cur) || '').trim().replace(/\\.md$/, '');
     if (!to || to === cur) return;
     if (!await flush()) { set(T.rename_unsaved, 'err'); return; }
     const r = await post('POST', '/api/rename', JSON.stringify({name: NAME, to}));
     if (!r.ok) { alert(r.j.error || r.status); return; }
+    if (T.demo && to !== cur) await window.h6082Demo.rename(cur, to);
     if (r.j.warning) alert(r.j.warning);
     gone = true;
     location.href = '/edit/' + encodeURIComponent(r.j.name);
   };
   if (del) del.onclick = async () => {
-    if (!confirm(T.confirm_delete_file.replace('{f}', NAME))) return;
+    if (!confirm((T.demo ? T.demo_confirm_delete : T.confirm_delete_file).replace('{f}', NAME))) return;
     clearTimeout(timer);
     gone = true;
+    if (T.demo) { window.h6082Demo.remove(window.h6082Demo.stemOf(NAME)); location.href = BACK; return; }
     const r = await post('DELETE', url);
     if (!r.ok) { gone = false; alert(r.j.error || r.status); return; }
     location.href = BACK;
@@ -4744,8 +4817,8 @@ def build_editor(cfg, tabs, fname):
     p = editable_path(fname)
     acts = ""
     if p is not None and p.parent == PAGES:
-        off = demo_off(cfg)
-        del_title = off or f' title="{t(cfg, "ed_delete_title")}"'
+        off = ""   # hide / rename / delete work in the demo too (in the visitor's browser)
+        del_title = f' title="{t(cfg, "ed_delete_title")}"'   # demo too: deleted in the visitor's browser
         ren_title = "" if off else f' title="{t(cfg, "ed_rename")}"'
         hidden = stem in cfg["tabs"]["hidden"]       # [tabs] hidden: out of the bar, reachable from settings
         hide_tip = t(cfg, "ed_unhide" if hidden else "ed_hide")
@@ -6113,7 +6186,7 @@ class Handler(BaseHTTPRequestHandler):
     # and references in config.toml; a translation file only by itself)
     def _api_rename(self):
         cfg = load_config()
-        if err := self._api_denied(cfg):
+        if err := self._api_denied(cfg, demo_ok=True):
             return self._json(403, {"error": err})
         if not self._auth_ok():
             return
@@ -6123,6 +6196,16 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError as e:
             return self._json(400, {"error": str(e)})
         p = editable_path(fname)
+        if DEMO:   # demo: a whole tab, checked only; the browser moves its copies
+            to = to[:-3] if to.endswith(".md") else to
+            st = tab_of(fname)
+            if not demo_page(cfg, p):
+                return self._json(404, {"error": t(cfg, "err_file_missing")})
+            if not TAB_RE.match(to) or LANG_SUFFIX_RE.match(to) or to in RESERVED or is_system(cfg, to):
+                return self._json(400, {"error": t(cfg, "err_bad_name")})
+            if to != st and any(True for _ in page_variants(to)):
+                return self._json(409, {"error": t(cfg, "err_exists", name=to)})
+            return self._json(200, {"name": to + fname[len(st):]})
         if p is None or p.parent != PAGES or not p.is_file():
             return self._json(404, {"error": t(cfg, "err_file_missing")})
         if to.endswith(".md"):
