@@ -718,6 +718,15 @@ main .muted { color: var(--muted); }
 .demo-bar button:hover { background: color-mix(in srgb, var(--bg) 20%, transparent); }
 [data-demo-off] { opacity: .45; cursor: not-allowed; }
 [data-demo-off] :is(input, button) { cursor: not-allowed; }
+.demo-note {   /* a floating notice (demo: config.toml is read-only) */
+  position: fixed; z-index: 70; left: 50%; bottom: 24px; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 10px; max-width: min(520px, calc(100vw - 32px)); padding: 8px 8px 8px 14px;
+  color: var(--text); background: var(--panel); border: 1px solid var(--callout-warning);
+  border-left-width: 4px; border-radius: var(--radius); box-shadow: 0 4px 16px rgb(0 0 0 / .3);
+}
+.demo-note button { margin-left: auto; padding: 0 8px; font: inherit; font-size: 1.2em; line-height: 1.4;
+  color: var(--muted); background: transparent; border: 0; cursor: pointer; }
+.demo-note button:hover { color: var(--text); }
 .demo-tip {
   position: fixed; z-index: 70; max-width: min(280px, 80vw); padding: 3px 8px; pointer-events: none;
   font-size: .9em; color: var(--text); background: var(--panel); border: 1px solid var(--callout-warning);

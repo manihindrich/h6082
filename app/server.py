@@ -387,6 +387,8 @@ STRINGS = {
         "js_demo_changed": "changed pages: {n}",
         "js_demo_reset_confirm": "Discard all your changes and return the demo to its original state?",
         "js_demo_confirm_delete": "Delete {f} with its translations? Only in this browser; \u201creset demo\u201d brings it back.",
+        "js_demo_close": "close",
+        "js_demo_cfg_ro": "The demo shows config.toml read-only: changes would not take effect.",
         "js_demo_deleted": "This page was deleted in the demo. \u201creset demo\u201d brings it back.",
         "block_edit": "edit this card",
         "err_block_changed": "the card was changed elsewhere — the page reloads, try again",
@@ -566,6 +568,8 @@ STRINGS = {
         "js_demo_changed": "změněné stránky: {n}",
         "js_demo_reset_confirm": "Zahodit všechny své změny a vrátit demo do původního stavu?",
         "js_demo_confirm_delete": "Smazat {f} i s překlady? Jen v tomto prohlížeči, tlačítko \u201eresetovat demo\u201c ji vrátí.",
+        "js_demo_close": "zavřít",
+        "js_demo_cfg_ro": "V demu je config.toml jen pro čtení: změny by se neprojevily.",
         "js_demo_deleted": "Tahle stránka je v demu smazaná. Vrátí ji tlačítko \u201eresetovat demo\u201c.",
         "block_edit": "upravit kartu",
         "err_block_changed": "karta se mezitím změnila jinde — stránka se načte znovu, zkus to pak",
@@ -1405,7 +1409,7 @@ def files_markdown(cfg, which="all"):
     if which in ("all", "system"):
         sysrows.append(row("markdown", [btn("/markdown", t(cfg, "f_view"))], t(cfg, "f_markdown_desc")))
         sysrows.append(row(t(cfg, "f_docs"), [btn("/documentation", t(cfg, "f_view"))], t(cfg, "f_docs_desc")))
-        sysrows.append(row(t(cfg, "f_config"), [btn("/edit/config.toml", t(cfg, "f_edit"), demo_off(cfg))] if ed else [],
+        sysrows.append(row(t(cfg, "f_config"), [btn("/edit/config.toml", t(cfg, "f_edit"))] if ed else [],
                            t(cfg, "f_config_desc")))
     if not rows and not sysrows:
         return ["", f"<small>{t(cfg, 'no_files')}</small>", ""]
@@ -3827,6 +3831,15 @@ __SMART__
       if (local !== null) ta.value = saved = local;   // demo: the visitor's own copy
       paint();
       set(j.warning ? '⚠ ' + j.warning : T.loaded, j.warning ? 'warn' : 'ok');
+      if (T.demo && NAME === 'config.toml') {   // demo: look, don't touch
+        ta.readOnly = true; blocked = true;
+        set('⚠ ' + T.demo_cfg_ro, 'warn');
+        const note = document.createElement('div'), x = document.createElement('button');
+        note.className = 'demo-note'; note.setAttribute('role', 'status'); note.textContent = '⚠ ' + T.demo_cfg_ro;
+        x.type = 'button'; x.textContent = '×'; x.title = T.demo_close; x.setAttribute('aria-label', T.demo_close);
+        x.onclick = () => note.remove();
+        note.append(x); document.body.append(note);
+      }
       ta.focus();
       ta.setSelectionRange(0, 0);   // start at the top of the file
       ta.scrollTop = 0;
@@ -3837,7 +3850,7 @@ __SMART__
     clearTimeout(timer);
     if (gone || (blocked && !force)) return;
     if (T.demo) {   // demo: keep it in this browser, refresh the preview
-      if (!dirty() && !force) return;
+      if (NAME === 'config.toml' || (!dirty() && !force)) return;   // config: read-only in the demo
       saved = ta.value;
       window.h6082Demo.set(NAME, saved);
       set(T.demo_saved + ' ' + new Date().toLocaleTimeString(T.locale), 'ok');
@@ -4007,9 +4020,10 @@ def favicon(cfg):
 
 
 def page(cfg, title, body, scripts="", body_class=""):
-    if DEMO:
+    if DEMO and "embed" not in body_class.split():   # no bar inside the editor's preview
         body = (f'<div class="demo-bar"><span>{t(cfg, "demo_bar")}</span><span class="demo-count"></span>'
                 f'<button type="button" data-demo-reset>{t(cfg, "demo_reset")}</button></div>' + body)
+    if DEMO:
         scripts = DEMO_JS.replace("__LANGS__", json.dumps(list(LANGS))) + scripts
     scripts = scripts.replace("__NONCE__", NONCE_PH).replace("__T__", js_strings(cfg))
     theme_js = THEME_JS.replace("__NONCE__", NONCE_PH).replace("__T__", js_strings(cfg))
@@ -4771,9 +4785,9 @@ def build_tab(cfg, tabs, name, embed, override=None, fid=None):
     return page(cfg, title, postprocess(body, cfg), scripts, "embed" if embed else "")
 
 
-def build_message(cfg, tabs, msg):
+def build_message(cfg, tabs, msg, body_class=""):
     return page(cfg, cfg["page"]["title"], f'{tab_bar(cfg, tabs, None, live=False)}<div class="grid"><div class="col">'
-                f'<section class="block"><div class="block-body"><p>{msg}</p></div></section></div></div>')
+                f'<section class="block"><div class="block-body"><p>{msg}</p></div></section></div></div>', body_class=body_class)
 
 
 def editor_langs(cfg, fname, p):
@@ -4899,7 +4913,8 @@ def render_tab(name, embed=False, lang=None):
                 return 200, build_message(cfg, tabs, t(cfg, "msg_no_pages")).encode()
         f = page_path(cfg, name) if TAB_RE.match(name) and not LANG_SUFFIX_RE.match(name) else None
         if f is None:
-            return 404, build_message(cfg, tabs, t(cfg, "msg_no_tab", name=html.escape(name))).encode()
+            return 404, build_message(cfg, tabs, t(cfg, "msg_no_tab", name=html.escape(name)),
+                                      "embed" if embed else "").encode()
         # style.css too: the page links it as ?v=<mtime>, a changed stylesheet must not keep the old link
         ex = page_path(cfg, "examples")   # {{example …}} on a page shows a scene from /examples
         key = (str(f), mtime(f), _cfg["mtime"], tuple(all_stems()), cur_lang(cfg), mtime(STATIC / "style.css"),
@@ -5713,12 +5728,12 @@ class Handler(BaseHTTPRequestHandler):
             return
         with _lock:
             cfg = load_config()
+            if DEMO:   # demo: the visitor's language lives in a cookie, not in config.toml
+                cfg = with_lang(cfg, self._cookie("h6082_lang"))
             tabs = list_tabs(cfg)
             p = editable_path(fname)
             if not cfg["editor"]["enabled"]:
                 code, body = 403, build_message(cfg, tabs, t(cfg, "msg_editor_disabled"))
-            elif DEMO and p == CFG_FILE:
-                code, body = 403, build_message(cfg, tabs, t(cfg, "demo_off"))
             elif p is None or not (p.is_file() or default_of(p) or demo_page(cfg, p)):
                 code, body = 404, build_message(cfg, tabs, t(cfg, "msg_not_editable", name=html.escape(fname)))
             else:
