@@ -26,7 +26,7 @@ Configuration, operation and security of h6082. You configure it in `config.toml
 - service status (HTTP, TCP) right next to links
 - RSS and server status as cards
 ### Appearance
-- 12 themes and an auto mode that follows the system
+- 20 themes and an auto mode that follows the system
 - interface and documentation in English and Czech
 - layout, font, colors and typography in `config.toml`
 
@@ -666,11 +666,19 @@ Pick one in the dropdown in the top bar of the settings page. The choice writes 
 | `solarized-dark` | dark | solarized-dark |
 | `catppuccin-mocha` | dark | one-dark |
 | `tokyo-night` | dark | one-dark |
+| `lagoon` | dark | material |
+| `meadow` | dark | monokai |
+| `berry` | dark | dracula |
+| `azure` | dark | github-dark |
 | `obsidian-light` | light | friendly |
 | `gruvbox-light` | light | gruvbox-light |
 | `solarized-light` | light | solarized-light |
 | `catppuccin-latte` | light | default |
 | `paper` | light | default |
+| `lagoon-light` | light | xcode |
+| `meadow-light` | light | default |
+| `berry-light` | light | xcode |
+| `azure-light` | light | default |
 | `auto` | follows the system | — |
 
 `obsidian` = colors from `[colors]` (default). `auto` picks between `auto_dark` and `auto_light` based on the system setting and switches even while the page is open.

@@ -82,8 +82,9 @@ default_limit = 10         # number of items when not given
 [theme]
 # The active theme is `default`. The theme picker on the settings page writes here.
 # Built-in: obsidian (= [colors] below), nord, dracula, gruvbox-dark, solarized-dark,
-# catppuccin-mocha, tokyo-night, obsidian-light, gruvbox-light, solarized-light,
-# catppuccin-latte, paper; "auto" = follows the OS (auto_dark / auto_light).
+# catppuccin-mocha, tokyo-night, lagoon, meadow, berry, azure, obsidian-light, gruvbox-light,
+# solarized-light, catppuccin-latte, paper, lagoon-light, meadow-light, berry-light, azure-light;
+# "auto" = follows the OS (auto_dark / auto_light).
 default    = "auto"        # active theme (or "auto")
 auto_dark  = "obsidian"        # theme for "auto" with a dark OS
 auto_light = "obsidian-light"  # theme for "auto" with a light OS

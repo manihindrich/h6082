@@ -26,7 +26,7 @@ Konfigurace, provoz a bezpečnost h6082. Nastavuje se v `config.toml` (**konfigu
 - stav služeb (HTTP, TCP) přímo u odkazů
 - RSS a stav serveru jako karty
 ### Vzhled
-- 12 motivů a režim auto podle systému
+- 20 motivů a režim auto podle systému
 - rozhraní a dokumentace v angličtině a češtině
 - rozložení, písmo, barvy a typografie v `config.toml`
 
@@ -666,11 +666,19 @@ Výběr je v rozbalovací nabídce v horní liště stránky nastavení. Volba z
 | `solarized-dark` | tmavý | solarized-dark |
 | `catppuccin-mocha` | tmavý | one-dark |
 | `tokyo-night` | tmavý | one-dark |
+| `lagoon` | tmavý | material |
+| `meadow` | tmavý | monokai |
+| `berry` | tmavý | dracula |
+| `azure` | tmavý | github-dark |
 | `obsidian-light` | světlý | friendly |
 | `gruvbox-light` | světlý | gruvbox-light |
 | `solarized-light` | světlý | solarized-light |
 | `catppuccin-latte` | světlý | default |
 | `paper` | světlý | default |
+| `lagoon-light` | světlý | xcode |
+| `meadow-light` | světlý | default |
+| `berry-light` | světlý | xcode |
+| `azure-light` | světlý | default |
 | `auto` | podle systému | — |
 
 `obsidian` = barvy z `[colors]` (výchozí). `auto` volí mezi `auto_dark` a `auto_light` podle nastavení systému a mění se i za běhu.

@@ -82,7 +82,7 @@ That is the whole format. Save the file and every open browser tab refreshes its
 | **Content** | tabs from md files · invisible columns and framed cards · tables, callouts, code with highlighting, footnotes, keys, abbreviations · own images · protected e-mail addresses |
 | **Live widgets** | HTTP/TCP status dot next to any link · RSS and Atom feeds · server stats (CPU, RAM, temperature, disks) · demo mode with made-up data for public pages |
 | **Editing** | web editor with live preview and autosave · tasks you tick, add and delete right on the page · notes that grow as you type · version history with diff and restore · trash instead of delete |
-| **Look** | 12 themes (obsidian, nord, dracula, gruvbox, solarized, catppuccin, tokyo night, paper…) plus auto light/dark · your own themes in a few lines of TOML · layout, font and colours configurable |
+| **Look** | 20 themes (obsidian, nord, dracula, gruvbox, solarized, catppuccin, tokyo night, paper, lagoon, meadow, berry, azure…) plus auto light/dark · your own themes in a few lines of TOML · layout, font and colours configurable |
 | **Languages** | UI and built-in documentation in English and Czech · translations of your own tabs side by side (`name.cs.md`) |
 | **Operations** | one small container · instant live reload · update-safe: built-in content ships in the image, your data stays in `content/` |
 
