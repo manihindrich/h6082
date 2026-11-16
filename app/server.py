@@ -1483,7 +1483,7 @@ def rss_box(cfg, args):
     if not args or not valid_http(args[0]):
         return f"<small>{t(cfg, 'rss_bad')}</small>"
     limit = int(args[1]) if len(args) > 1 and args[1].isdigit() else int(cfg["rss"]["default_limit"])
-    FEEDS.add(args[0])
+    allow_target(FEEDS, args[0])
     return (f'<div class="rss" data-feed="{html.escape(args[0])}" data-limit="{limit}">'
             f'<small>{t(cfg, "loading_feed")}</small></div>')
 
@@ -2029,6 +2029,14 @@ HREF_RE = re.compile(r'\shref="([^"]*)"')
 
 CHECK_TARGETS = set()   # targets /api/check may probe (only those found in md files)
 FEEDS = set()           # feeds /api/rss may fetch (only those found in md files)
+_untrusted = threading.local()   # .on = rendering a visitor's text (demo): register no targets / feeds
+
+
+def allow_target(s, x):
+    """Adds a check target / feed to its allow-list, but never from a visitor's text: /api/check and
+    /api/rss read the lists without the render lock, a temporary entry would let them probe it."""
+    if not getattr(_untrusted, "on", False):
+        s.add(x)
 
 
 def valid_http(url):
@@ -2075,7 +2083,7 @@ def mark_checks(htm):
             return demo_check(tag, target, cls.split())
         if not target or not valid_target(target):
             return tag
-        CHECK_TARGETS.add(target)
+        allow_target(CHECK_TARGETS, target)
         return tag[:-1] + f' data-check="{html.escape(target)}">'
     return A_TAG_RE.sub(fix, htm)
 
@@ -5975,13 +5983,12 @@ class Handler(BaseHTTPRequestHandler):
             fid = fid if re.fullmatch(re.escape(name) + r"(\.(" + "|".join(LANGS) + r"))?\.md", fid) else None
             if page_path(cfg, name) is None and fid is None:
                 return self._json(404, {"error": t(cfg, "err_file_missing")})
-            feeds, targets = set(FEEDS), set(CHECK_TARGETS)
+            _untrusted.on = True   # the visitor's feeds and check targets are never allowed
             try:
                 out = build_tab(cfg, tabs, name, bool(data.get("embed")), override=doc.replace("\r\n", "\n"),
                                 fid=fid if page_path(cfg, name) is None else None)
             finally:
-                FEEDS.clear(); FEEDS.update(feeds)
-                CHECK_TARGETS.clear(); CHECK_TARGETS.update(targets)
+                _untrusted.on = False
         self._send(200, out.encode("utf-8"), "text/html; charset=utf-8")
 
     def _api_tasks(self):
