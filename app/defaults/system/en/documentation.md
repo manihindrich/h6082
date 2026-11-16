@@ -26,7 +26,7 @@ Configuration, operation and security of h6082. You configure it in `config.toml
 - service status (HTTP, TCP) right next to links
 - RSS and server status as cards
 ### Appearance
-- 20 themes and an auto mode that follows the system
+- 32 themes and an auto mode that follows the system
 - interface and documentation in English and Czech
 - layout, font, colors and typography in `config.toml`
 
@@ -639,6 +639,9 @@ A custom theme, or a tweak of a built-in one when you use its name. Keys are as 
 `pygments_style`
 : code highlighting scheme
 
+`pair`
+: name of the counterpart in the other scheme (e.g. a light theme's dark version). The picker then shows them side by side on one row.
+
 Missing colors are filled in from `obsidian`.
 ```toml
 [themes.mine]
@@ -657,31 +660,26 @@ accent = "#b48ead"
 ## Themes
 Pick one in the dropdown in the top bar of the settings page. The choice writes the theme to `config.toml` as `[theme] default` (with the editor password), so it applies to all browsers. Other lines and comments in the config stay unchanged.
 
-| theme | type | code |
-|---|---|---|
-| `obsidian` | dark | `[code]` |
-| `nord` | dark | nord |
-| `dracula` | dark | dracula |
-| `gruvbox-dark` | dark | gruvbox-dark |
-| `solarized-dark` | dark | solarized-dark |
-| `catppuccin-mocha` | dark | one-dark |
-| `tokyo-night` | dark | one-dark |
-| `lagoon` | dark | material |
-| `meadow` | dark | monokai |
-| `berry` | dark | dracula |
-| `azure` | dark | github-dark |
-| `obsidian-light` | light | friendly |
-| `gruvbox-light` | light | gruvbox-light |
-| `solarized-light` | light | solarized-light |
-| `catppuccin-latte` | light | default |
-| `paper` | light | default |
-| `lagoon-light` | light | xcode |
-| `meadow-light` | light | default |
-| `berry-light` | light | xcode |
-| `azure-light` | light | default |
-| `auto` | follows the system | — |
+| dark | code | light | code |
+|---|---|---|---|
+| `obsidian` | `[code]` | `obsidian-light` | friendly |
+| `nord` | nord | `nord-light` | default |
+| `dracula` | dracula | `dracula-light` | xcode |
+| `gruvbox-dark` | gruvbox-dark | `gruvbox-light` | gruvbox-light |
+| `solarized-dark` | solarized-dark | `solarized-light` | solarized-light |
+| `catppuccin-mocha` | one-dark | `catppuccin-latte` | default |
+| `tokyo-night` | one-dark | `tokyo-night-day` | xcode |
+| `lagoon` | material | `lagoon-light` | xcode |
+| `meadow` | monokai | `meadow-light` | default |
+| `berry` | dracula | `berry-light` | xcode |
+| `azure` | github-dark | `azure-light` | default |
+| `paper-dark` | github-dark | `paper` | default |
+| `one-dark` | one-dark | `one-light` | xcode |
+| `rose-pine` | dracula | `rose-pine-dawn` | xcode |
+| `everforest` | gruvbox-dark | `everforest-light` | gruvbox-light |
+| `ayu-mirage` | material | `ayu-light` | default |
 
-`obsidian` = colors from `[colors]` (default). `auto` picks between `auto_dark` and `auto_light` based on the system setting and switches even while the page is open.
+Each row is the dark and the light version of the same look, as in the picker. `obsidian` = colors from `[colors]` (default). `auto` picks between `auto_dark` and `auto_light` based on the system setting and switches even while the page is open.
 
 Preview without saving the choice: `?theme=<theme>`, e.g. [/documentation?theme=paper](/documentation?theme=paper).
 

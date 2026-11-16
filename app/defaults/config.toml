@@ -81,15 +81,18 @@ default_limit = 10         # number of items when not given
 
 [theme]
 # The active theme is `default`. The theme picker on the settings page writes here.
-# Built-in: obsidian (= [colors] below), nord, dracula, gruvbox-dark, solarized-dark,
-# catppuccin-mocha, tokyo-night, lagoon, meadow, berry, azure, obsidian-light, gruvbox-light,
-# solarized-light, catppuccin-latte, paper, lagoon-light, meadow-light, berry-light, azure-light;
-# "auto" = follows the OS (auto_dark / auto_light).
+# Built-in pairs (dark / light): obsidian (= [colors] below) / obsidian-light, nord / nord-light,
+# dracula / dracula-light, gruvbox-dark / gruvbox-light, solarized-dark / solarized-light,
+# catppuccin-mocha / catppuccin-latte, tokyo-night / tokyo-night-day, lagoon / lagoon-light,
+# meadow / meadow-light, berry / berry-light, azure / azure-light, paper-dark / paper,
+# one-dark / one-light, rose-pine / rose-pine-dawn, everforest / everforest-light,
+# ayu-mirage / ayu-light; "auto" = follows the OS (auto_dark / auto_light).
 default    = "auto"        # active theme (or "auto")
 auto_dark  = "obsidian"        # theme for "auto" with a dark OS
 auto_light = "obsidian-light"  # theme for "auto" with a light OS
 
-# Custom theme (or a tweak of a built-in one): keys as in [colors] + scheme, label, pygments_style.
+# Custom theme (or a tweak of a built-in one): keys as in [colors] + scheme, label, pygments_style
+# and pair (the counterpart in the other scheme, shown on the same row in the picker).
 # Missing colours are taken from obsidian.
 # [themes.mine]
 # label          = "mine"

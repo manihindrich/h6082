@@ -490,7 +490,7 @@ details.lang-dd > summary:hover, details.lang-dd[open] > summary { border-color:
 .theme-dd .pick-list { width: 400px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; align-items: start; }
 .theme-dd .pick-list > .swatch.auto { grid-column: 1 / -1; }
 .theme-dd .pick-list .sw-grid { grid-template-columns: 1fr; }
-/* languages: one per line */
+.theme-dd .pick-list { max-height: min(80vh, 640px); }/* languages: one per line */
 .lang-dd .pick-list { display: flex; flex-direction: column; gap: 4px; min-width: 100%; }
 .lang-dd .pick-list .lang-btn { text-align: left; }
 /* in the top bar of the settings page: a bit smaller, the lists open towards the page */

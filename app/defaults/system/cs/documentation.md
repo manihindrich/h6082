@@ -26,7 +26,7 @@ Konfigurace, provoz a bezpečnost h6082. Nastavuje se v `config.toml` (**konfigu
 - stav služeb (HTTP, TCP) přímo u odkazů
 - RSS a stav serveru jako karty
 ### Vzhled
-- 20 motivů a režim auto podle systému
+- 32 motivů a režim auto podle systému
 - rozhraní a dokumentace v angličtině a češtině
 - rozložení, písmo, barvy a typografie v `config.toml`
 
@@ -639,6 +639,9 @@ Vlastní motiv, nebo úprava vestavěného, když použiješ jeho jméno. Klíč
 `pygments_style`
 : schéma zvýraznění kódu
 
+`pair`
+: jméno protějšku v opačném schématu (např. u světlého motivu jeho tmavá podoba). V přepínači jsou pak na jednom řádku vedle sebe.
+
 Chybějící barvy se doplní z `obsidian`.
 ```toml
 [themes.muj]
@@ -657,31 +660,26 @@ accent = "#b48ead"
 ## Motivy
 Výběr je v rozbalovací nabídce v horní liště stránky nastavení. Volba zapíše motiv do `config.toml` jako `[theme] default` (s heslem editoru), takže platí pro všechny prohlížeče. Ostatní řádky a komentáře v configu zůstanou beze změny.
 
-| motiv | typ | kód |
-|---|---|---|
-| `obsidian` | tmavý | `[code]` |
-| `nord` | tmavý | nord |
-| `dracula` | tmavý | dracula |
-| `gruvbox-dark` | tmavý | gruvbox-dark |
-| `solarized-dark` | tmavý | solarized-dark |
-| `catppuccin-mocha` | tmavý | one-dark |
-| `tokyo-night` | tmavý | one-dark |
-| `lagoon` | tmavý | material |
-| `meadow` | tmavý | monokai |
-| `berry` | tmavý | dracula |
-| `azure` | tmavý | github-dark |
-| `obsidian-light` | světlý | friendly |
-| `gruvbox-light` | světlý | gruvbox-light |
-| `solarized-light` | světlý | solarized-light |
-| `catppuccin-latte` | světlý | default |
-| `paper` | světlý | default |
-| `lagoon-light` | světlý | xcode |
-| `meadow-light` | světlý | default |
-| `berry-light` | světlý | xcode |
-| `azure-light` | světlý | default |
-| `auto` | podle systému | — |
+| tmavý | kód | světlý | kód |
+|---|---|---|---|
+| `obsidian` | `[code]` | `obsidian-light` | friendly |
+| `nord` | nord | `nord-light` | default |
+| `dracula` | dracula | `dracula-light` | xcode |
+| `gruvbox-dark` | gruvbox-dark | `gruvbox-light` | gruvbox-light |
+| `solarized-dark` | solarized-dark | `solarized-light` | solarized-light |
+| `catppuccin-mocha` | one-dark | `catppuccin-latte` | default |
+| `tokyo-night` | one-dark | `tokyo-night-day` | xcode |
+| `lagoon` | material | `lagoon-light` | xcode |
+| `meadow` | monokai | `meadow-light` | default |
+| `berry` | dracula | `berry-light` | xcode |
+| `azure` | github-dark | `azure-light` | default |
+| `paper-dark` | github-dark | `paper` | default |
+| `one-dark` | one-dark | `one-light` | xcode |
+| `rose-pine` | dracula | `rose-pine-dawn` | xcode |
+| `everforest` | gruvbox-dark | `everforest-light` | gruvbox-light |
+| `ayu-mirage` | material | `ayu-light` | default |
 
-`obsidian` = barvy z `[colors]` (výchozí). `auto` volí mezi `auto_dark` a `auto_light` podle nastavení systému a mění se i za běhu.
+Na jednom řádku je vždy tmavá a světlá podoba téhož vzhledu, stejně jako v přepínači. `obsidian` = barvy z `[colors]` (výchozí). `auto` volí mezi `auto_dark` a `auto_light` podle nastavení systému a mění se i za běhu.
 
 Náhled bez uložení volby: `?theme=<motiv>`, např. [/documentation?theme=paper](/documentation?theme=paper).
 
