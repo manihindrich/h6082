@@ -1414,8 +1414,17 @@ def demo_off(cfg):
     return f' data-demo-off aria-disabled="true" data-demo-tip="{html.escape(t(cfg, "demo_off"))}"' if DEMO else ""
 
 
+def demo_page(cfg, p):
+    """Demo: a user page that may exist only in the visitor's browser (valid name, not on disk)."""
+    if not DEMO or p is None or p.parent != PAGES or p.suffix != ".md":
+        return False
+    m = LANG_SUFFIX_RE.match(p.stem)
+    base = m.group(1) if m else p.stem
+    return bool(TAB_RE.match(p.stem)) and base not in RESERVED and not is_system(cfg, base)
+
+
 def newfile_html(cfg):
-    off = demo_off(cfg)
+    off = ""   # demo too: the new page lives in the visitor's browser
     title = "" if off else f' title="{html.escape(t(cfg, "newfile_title"))}"'
     return (f'<form class="newfile"{off}><input name="n" placeholder="{t(cfg, "newfile_placeholder")}" autocomplete="off" '
             f'pattern="[A-Za-z0-9][A-Za-z0-9_.\\-]*" required{" readonly" if off else ""}><span>.md</span>'
@@ -2136,6 +2145,7 @@ window.h6082 = (() => {
     e.preventDefault();
     const n = f.querySelector('input').value.trim().replace(/\\.md$/, '');
     const r = await api('/api/new', {method: 'POST', body: JSON.stringify({name: n})});
+    if (r.ok && T.demo && window.h6082Demo) window.h6082Demo.create(n, r.j.text || '');
     if (r.ok) location.href = '/edit/' + encodeURIComponent(n) + '.md'; else alert(r.j.error || r.status);
   });
 
@@ -2958,13 +2968,48 @@ window.h6082 = (() => {
 DEMO_JS = """<script nonce="__NONCE__">
 window.h6082Demo = (() => {
   const T = __T__;
-  const P = 'h6082-demo:';
+  const P = 'h6082-demo:', LANGS = __LANGS__;
   const get = (k) => { try { return localStorage.getItem(P + k); } catch (e) { return null; } };
   const keys = () => { try { return Object.keys(localStorage).filter((k) => k.startsWith(P)); } catch (e) { return []; } };
+  // "~tabs": pages created / deleted / hidden in this browser ({new, del, hid}: lists of tab names)
+  function meta() {
+    let m = {};
+    try { m = JSON.parse(localStorage.getItem(P + '~tabs') || '{}') || {}; } catch (e) {}
+    return {new: m.new || [], del: m.del || [], hid: m.hid || []};
+  }
+  function setMeta(m) { try { localStorage.setItem(P + '~tabs', JSON.stringify(m)); } catch (e) {} count(); }
+  const stemOf = (fid) => fid.replace(/\\.md$/, '').replace(new RegExp('\\\\.(' + LANGS.join('|') + ')$'), '');
+  const here = () => { try { return decodeURIComponent(location.pathname.slice(1)); } catch (e) { return ''; } };
+  function create(name, text) {   // name: "notes" or "notes.cs"
+    const st = stemOf(name + '.md'), m = meta();
+    set(name + '.md', text);
+    if (!m.new.includes(st)) m.new.push(st);
+    m.del = m.del.filter((x) => x !== st);
+    setMeta(m);
+  }
+  function tabs() {   // the tab bar: + pages created here, − deleted / hidden ones
+    const m = meta(), nav = document.querySelector('nav.tabs');
+    document.querySelectorAll('header.topbar a.tab').forEach((a) => {
+      const s = decodeURIComponent((a.getAttribute('href') || '').slice(1));
+      if (m.del.includes(s) || (m.hid.includes(s) && !a.hasAttribute('aria-current'))) a.hidden = true;
+    });
+    if (!nav) return;
+    for (const s of m.new) {
+      if (m.del.includes(s) || m.hid.includes(s) || nav.querySelector('a[href="/' + encodeURIComponent(s) + '"]')) continue;
+      const a = document.createElement('a');
+      a.className = 'tab'; a.href = '/' + encodeURIComponent(s); a.textContent = s;
+      if (s === here()) {
+        a.classList.add('active'); a.setAttribute('aria-current', 'page');
+        document.querySelectorAll('header.topbar .right a.tab.sub').forEach((x) => { x.hidden = true; });
+      }
+      nav.append(a);
+    }
+  }
   function count() {
+    tabs();
     const el = document.querySelector('.demo-count');
     if (!el) return;
-    const n = keys().length;
+    const n = keys().filter((k) => !k.startsWith(P + '~')).length;
     el.textContent = n ? T.demo_changed.replace('{n}', n) : '';
   }
   function set(k, v) { try { localStorage.setItem(P + k, v); } catch (e) { /* storage blocked: edit lasts for the page only */ } count(); }
@@ -2974,16 +3019,23 @@ window.h6082Demo = (() => {
     location.reload();
   }
   async function render() {
-    const rows = document.querySelector('[data-fid]');
-    if (!rows) return;
-    const doc = get(rows.dataset.fid);
-    if (doc === null) return;
+    const rows = document.querySelector('[data-fid]'), m0 = meta();
+    const name = rows ? rows.dataset.tab : here();
+    if (!name || !(rows || m0.new.includes(name))) return;
+    // the visitor's copy: their own translation for this language first, then the file shown
+    const lang = document.documentElement.lang;
+    const fids = [name + '.' + lang + '.md', rows ? rows.dataset.fid : name + '.md'].concat(LANGS.map((x) => name + '.' + x + '.md'));
+    const fid = fids.find((f) => get(f) !== null);
+    if (!fid) return;
+    const doc = get(fid);
     const q = new URLSearchParams(location.search);
     const r = await fetch('/api/render', {method: 'POST', cache: 'no-store',
       headers: {'X-H6082': '1', 'Content-Type': 'application/json'},
-      body: JSON.stringify({name: rows.dataset.tab, doc, embed: q.get('embed') === '1', lang: q.get('lang') || ''})});
+      body: JSON.stringify({name, fid, doc, embed: q.get('embed') === '1', lang: q.get('lang') || ''})});
     if (!r.ok) return;
-    const m = new DOMParser().parseFromString(await r.text(), 'text/html').querySelector('main');
+    const d = new DOMParser().parseFromString(await r.text(), 'text/html'), m = d.querySelector('main');
+    if (d.title) document.title = d.title;
+    document.body.className = d.body.className;
     if (m) document.querySelector('main').replaceWith(m);
     if (window.h6082 && window.h6082.init) window.h6082.init();
     count();
@@ -3021,7 +3073,7 @@ window.h6082Demo = (() => {
   });
   count();
   render();
-  return {get, set, render, count};
+  return {get, set, render, count, create, meta, setMeta};
 })();
 </script>"""
 
@@ -3802,6 +3854,7 @@ __SMART__
     if (!await flush()) { set(T.rename_unsaved, 'err'); return; }
     const r = await post('POST', '/api/new', JSON.stringify({name: b.dataset.new}));
     if (!r.ok) { alert(r.j.error || r.status); return; }
+    if (T.demo) window.h6082Demo.create(b.dataset.new, r.j.text || '');
     gone = true;
     location.href = '/edit/' + encodeURIComponent(r.j.name);
   }));
@@ -3884,7 +3937,7 @@ def page(cfg, title, body, scripts="", body_class=""):
     if DEMO:
         body = (f'<div class="demo-bar"><span>{t(cfg, "demo_bar")}</span><span class="demo-count"></span>'
                 f'<button type="button" data-demo-reset>{t(cfg, "demo_reset")}</button></div>' + body)
-        scripts = DEMO_JS + scripts
+        scripts = DEMO_JS.replace("__LANGS__", json.dumps(list(LANGS))) + scripts
     scripts = scripts.replace("__NONCE__", NONCE_PH).replace("__T__", js_strings(cfg))
     theme_js = THEME_JS.replace("__NONCE__", NONCE_PH).replace("__T__", js_strings(cfg))
     return f"""<!doctype html>
@@ -4611,10 +4664,10 @@ def smart_js(cfg):
     return "window.H6082_SUGGEST = " + json.dumps(conf, ensure_ascii=False).replace("<", "\\u003c") + ";\n" + SMART_JS
 
 
-def build_tab(cfg, tabs, name, embed, override=None):
+def build_tab(cfg, tabs, name, embed, override=None, fid=None):
     md = make_md(cfg)
     src = page_path(cfg, name)
-    fid = file_id(src)
+    fid = fid or file_id(src)   # fid given: demo, a page that exists only in the visitor's browser
     raw = src.read_text(encoding="utf-8") if override is None else override
     editable = cfg["editor"]["enabled"] and not is_system(cfg, name) and not embed
     text, demos = extract_livedemos(cfg, raw)
@@ -4666,7 +4719,7 @@ def editor_langs(cfg, fname, p):
                 items.append(f'<a class="tab" href="/edit/{quote(f.name)}" title="{f.name}">{label}</a>')
             elif lang and cfg["editor"]["enabled"]:
                 tip = "" if DEMO else f' title="{html.escape(t(cfg, "ed_lang_new_title", f=f.name))}"'
-                items.append(f'<button type="button" class="tab sub" data-new="{base}.{lang}"{demo_off(cfg)}{tip}>+ {lang}</button>')
+                items.append(f'<button type="button" class="tab sub" data-new="{base}.{lang}"{tip}>+ {lang}</button>')
         if sum(1 for f in page_variants(base)) < 2:   # no translations: no language buttons
             return ""
     elif m := SYSTEM_FILE_RE.match(fname):
@@ -5593,7 +5646,7 @@ class Handler(BaseHTTPRequestHandler):
                 code, body = 403, build_message(cfg, tabs, t(cfg, "msg_editor_disabled"))
             elif DEMO and p == CFG_FILE:
                 code, body = 403, build_message(cfg, tabs, t(cfg, "demo_off"))
-            elif p is None or not (p.is_file() or default_of(p)):
+            elif p is None or not (p.is_file() or default_of(p) or demo_page(cfg, p)):
                 code, body = 404, build_message(cfg, tabs, t(cfg, "msg_not_editable", name=html.escape(fname)))
             else:
                 code, body = 200, build_editor(cfg, tabs, fname)
@@ -5607,6 +5660,8 @@ class Handler(BaseHTTPRequestHandler):
             return
         p = editable_path(fname)
         src = p if p is not None and p.is_file() else (default_of(p) if p is not None else None)
+        if src is None and p is not None and demo_page(cfg, p):   # demo: the visitor's copy is in the browser
+            return self._json(200, {"name": fname, "text": "", "mtime": "0", "warning": None})
         if src is None:
             return self._json(404, {"error": t(cfg, "err_file_missing")})
         text = src.read_text(encoding="utf-8")
@@ -5651,11 +5706,11 @@ class Handler(BaseHTTPRequestHandler):
         doc = data.get("doc")
         if DEMO and isinstance(doc, str) and len(doc.encode()) <= int(cfg["editor"]["max_size_kb"]) * 1024:
             return doc.replace("\r\n", "\n")
-        return p.read_text(encoding="utf-8")
+        return p.read_text(encoding="utf-8") if p.is_file() else ""
 
     def _user_md(self, cfg, fname):
         p = editable_path(fname)
-        if p is None or p == CFG_FILE or not p.is_file():
+        if p is None or p == CFG_FILE or not (p.is_file() or demo_page(cfg, p)):
             self._json(404, {"error": t(cfg, "err_file_missing")})
             return None
         if is_system(cfg, p.stem):
@@ -5826,11 +5881,16 @@ class Handler(BaseHTTPRequestHandler):
         with _lock:
             cfg = with_lang(cfg, lang)
             tabs = list_tabs(cfg)
-            if not TAB_RE.match(name) or LANG_SUFFIX_RE.match(name) or page_path(cfg, name) is None:
+            if not TAB_RE.match(name) or LANG_SUFFIX_RE.match(name) or name in RESERVED or is_system(cfg, name):
+                return self._json(404, {"error": t(cfg, "err_file_missing")})
+            fid = str(data.get("fid") or "")   # a page created in the visitor's browser: its local file id
+            fid = fid if re.fullmatch(re.escape(name) + r"(\.(" + "|".join(LANGS) + r"))?\.md", fid) else None
+            if page_path(cfg, name) is None and fid is None:
                 return self._json(404, {"error": t(cfg, "err_file_missing")})
             feeds, targets = set(FEEDS), set(CHECK_TARGETS)
             try:
-                out = build_tab(cfg, tabs, name, bool(data.get("embed")), override=doc.replace("\r\n", "\n"))
+                out = build_tab(cfg, tabs, name, bool(data.get("embed")), override=doc.replace("\r\n", "\n"),
+                                fid=fid if page_path(cfg, name) is None else None)
             finally:
                 FEEDS.clear(); FEEDS.update(feeds)
                 CHECK_TARGETS.clear(); CHECK_TARGETS.update(targets)
@@ -6145,7 +6205,7 @@ class Handler(BaseHTTPRequestHandler):
         if path != "/api/new":
             return self._json(404, {"error": t(load_config(), "err_unknown_endpoint")})
         cfg = load_config()
-        if err := self._api_denied(cfg):
+        if err := self._api_denied(cfg, demo_ok=True):
             return self._json(403, {"error": err})
         if not self._auth_ok():
             return
@@ -6162,6 +6222,9 @@ class Handler(BaseHTTPRequestHandler):
         with _lock:
             if p.exists():
                 return self._json(409, {"error": t(cfg, "err_exists", name=name)})
+            if DEMO:   # demo: the page lives in the visitor's browser, nothing is written
+                m = LANG_SUFFIX_RE.match(name)
+                return self._json(201, {"name": f"{name}.md", "text": t(with_lang(cfg, m.group(2)) if m else cfg, "new_file")})
             try:
                 # a translation (name.cs) gets the template in its own language
                 m = LANG_SUFFIX_RE.match(name)
