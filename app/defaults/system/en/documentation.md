@@ -429,6 +429,9 @@ A missing key has its default value.
 `favicon` · `""`
 : browser tab icon: `""` = built-in purple diamond, otherwise a single character or emoji (`"🚀"`)
 
+`description` · `"markdown homepage"`
+: description in link previews in chat apps and on social sites. The preview shows the title, this description and the app icon. `""` = no description.
+
 `lang` · `"en"`
 : language of the interface and built-in pages: `en` or `cs`. It can also be switched in the dropdown in the top bar of the settings page (or with the `{{lang}}` shortcode); the choice is written here.
 

@@ -93,6 +93,7 @@ DEFAULTS = {
     "page": {
         "title": "home",
         "favicon": "",            # "" = the built-in purple diamond; or any character / emoji
+        "description": "markdown homepage",   # link previews (chat apps, social sites); "" = none
         "lang": "en",
         "links_new_tab": True,
         "header": "",
@@ -4168,6 +4169,26 @@ def favicon(cfg):
     return "data:image/svg+xml," + quote(svg)
 
 
+# link previews (chat apps, social sites): title, description and the icon. The image needs an
+# absolute URL; ORIGIN_PH is replaced per request with the scheme and host (see _send).
+ORIGIN_PH = "__ORIGIN__"
+PREVIEW_ICON = "/static/img/icon.png"   # 512 × 512
+
+
+def preview_meta(cfg, title):
+    e = lambda s: html.escape(str(s), quote=True)
+    desc = str(cfg["page"].get("description", "")).strip()
+    out = [f'<meta property="og:type" content="website">',
+           f'<meta property="og:site_name" content="{e(cfg["page"]["title"])}">',
+           f'<meta property="og:title" content="{e(title)}">']
+    if desc:
+        out += [f'<meta name="description" content="{e(desc)}">', f'<meta property="og:description" content="{e(desc)}">']
+    out += [f'<meta property="og:image" content="{ORIGIN_PH}{PREVIEW_ICON}">',
+            '<meta property="og:image:width" content="512">', '<meta property="og:image:height" content="512">',
+            '<meta name="twitter:card" content="summary">']
+    return "\n".join(out)
+
+
 def page(cfg, title, body, scripts="", body_class=""):
     if DEMO and "embed" not in body_class.split():   # no bar inside the editor's preview
         body = (f'<div class="demo-bar"><span>{t(cfg, "demo_bar")}</span><span class="demo-count"></span>'
@@ -4182,6 +4203,7 @@ def page(cfg, title, body, scripts="", body_class=""):
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{html.escape(title)}</title>
+{preview_meta(cfg, title)}
 <link rel="icon" href="{favicon(cfg)}">
 <link rel="stylesheet" href="/static/style.css?v={mtime(STATIC / 'style.css')}">
 <link rel="stylesheet" id="themes-css" href="/themes.css?v={_cfg['mtime']}">
@@ -5729,10 +5751,20 @@ class Handler(BaseHTTPRequestHandler):
         d = cfg["theme"]["default"]
         return d if d in names else "obsidian"
 
+    def _origin(self):
+        """scheme://host of this request for absolute links (link preview image); "" = a relative one.
+        Behind a TLS proxy the scheme comes from X-Forwarded-Proto."""
+        host = self.headers.get("Host") or ""
+        if not re.fullmatch(r"[A-Za-z0-9.-]{1,253}(:\d{1,5})?|\[[0-9A-Fa-f:.]{2,45}\](:\d{1,5})?", host):
+            return ""
+        proto = (self.headers.get("X-Forwarded-Proto") or "").split(",")[0].strip().lower()
+        return f"{proto if proto in ('http', 'https') else 'http'}://{host}"
+
     def _send(self, code, body, ctype, cache="no-cache"):
         csp = None
         if ctype.startswith("text/html"):
             body = body.replace(b'data-theme="__THEME__"', f'data-theme="{self._theme()}"'.encode(), 1)
+            body = body.replace(f'content="{ORIGIN_PH}/'.encode(), f'content="{self._origin()}/'.encode(), 1)
             nonce = secrets.token_urlsafe(16)
             body = body.replace(NONCE_PH.encode(), nonce.encode())
             csp = (f"default-src 'self'; script-src 'self' 'nonce-{nonce}'; style-src 'self' 'unsafe-inline'; "

@@ -7,6 +7,7 @@
 [page]
 title         = "h6082"    # browser tab title (with several tabs: "<tab> · <title>")
 favicon       = ""         # browser tab icon: "" = the built-in purple diamond, or one character / emoji ("🚀")
+description   = "markdown homepage"   # text of link previews in chat apps and social sites; "" = none
 lang          = "en"       # UI and built-in pages language: en | cs (also set by the language drop-down on the settings page)
 links_new_tab = true       # open external links (http/https) in a new tab
 header        = "**h6082** · homepage"   # header on the left of the top bar (inline markdown); "" = none

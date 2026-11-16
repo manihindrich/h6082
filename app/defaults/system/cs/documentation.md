@@ -429,6 +429,9 @@ Chybějící klíč má výchozí hodnotu.
 `favicon` · `""`
 : ikona záložky prohlížeče: `""` = vestavěný fialový diamant, jinak jeden znak nebo emoji (`"🚀"`)
 
+`description` · `"markdown homepage"`
+: popis v náhledu odkazu v chatovacích aplikacích a na sociálních sítích. Náhled ukáže titulek, tento popis a ikonu aplikace. `""` = bez popisu.
+
 `lang` · `"en"`
 : jazyk rozhraní a vestavěných stránek: `en` nebo `cs`. Přepíná se i rozbalovací nabídkou v horní liště stránky nastavení (nebo shortcodem `{{lang}}`), volba se zapíše sem.
 
