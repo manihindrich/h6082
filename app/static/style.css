@@ -145,6 +145,7 @@ time.due.over { color: var(--callout-danger); background: color-mix(in srgb, var
 @media (max-width: 640px) {
   .grid { grid-template-columns: 1fr; }
   .cols > .col { flex-basis: 100%; min-width: 0; }
+  .cols > .col.fixed { flex-basis: 100%; }   /* #25% / #120px too: one column per line, as documented */
 }
 
 /* ---- subheadings (###, ####) ------------------------------------------- */
